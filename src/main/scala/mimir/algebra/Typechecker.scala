@@ -6,7 +6,6 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.Database
 import mimir.algebra.function._
-import mimir.models.{Model, ModelManager}
 import Arith.{Add, Sub, Mult, Div, And, Or, BitAnd, BitOr, ShiftLeft, ShiftRight}
 import Cmp.{Gt, Lt, Lte, Gte, Eq, Neq, Like, NotLike}
 
@@ -52,8 +51,7 @@ class MissingVariable(varName: Var, e: Throwable, context: Option[Operator] = No
  */
 class Typechecker(
 	functions: Option[FunctionRegistry] = None, 
-	aggregates: Option[AggregateRegistry] = None,
-	models: Option[ModelManager] = None
+	aggregates: Option[AggregateRegistry] = None
 ) extends LazyLogging {
 	/* Assert that the expressions claimed type is its type */
 	def assert(e: Expression, t: Type, scope: (ID => Type), context: Option[Operator] = None, msg: String = "Typechecker"): Unit = {

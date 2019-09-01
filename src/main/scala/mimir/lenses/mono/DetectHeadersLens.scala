@@ -116,7 +116,7 @@ object DetectHeadersLens
     val duplicateHeaderColumns = 
         collection.mutable.Map((
                 // groupBy(identity) pairs together columns with the same name
-          header.filter { !_.equals(NullPrimitive) }
+          header.filter { !_.equals(NullPrimitive()) }
                 .map { _.asString }
                 .groupBy(identity)
                 // pick out column names that appear multiple times
@@ -140,7 +140,10 @@ object DetectHeadersLens
     // right.
     val goodHeaderColumnIndexes = 
       header.zipWithIndex
-            .filter { case (col, idx) => isReasonableHeaderName(col.asString) }
+            .filter { 
+              case (NullPrimitive(), _) => false
+              case (col, idx) => isReasonableHeaderName(col.asString) 
+            }
             .map { _._2 }
             .toSet
 

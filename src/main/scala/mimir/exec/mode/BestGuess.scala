@@ -59,7 +59,7 @@ object BestGuess
 
 
     // Tag rows/columns with provenance metadata
-    oper = OperatorDeterminism.compile(oper, db.models.get(_)) 
+    oper = OperatorDeterminism.compile(oper)
     val colDeterminism = rawColumns.toSeq.map { OperatorDeterminism.mimirColDeterministicColumn(_) }
 
     logger.debug(s"PERCOLATED: $oper")

@@ -18,33 +18,33 @@ class FeedbackStats(db: Database){
    *  the number of feedback elements that are equal to the trusted
    *  value.
    */
-  def calcConfidence() : Unit = {
-    val models = db.models.getAllModels
-    var sourceStats = scala.collection.mutable.Map[FeedbackSourceIdentifier, (Int,Int)]() // (correct,total)
-    db.models.getAllModels.flatMap {
-      case modelfb:SourcedFeedback => Some(modelfb)
-      case _ => None
-    }.map( modelfb => {
-        for((fbKey,sourceMap) <- modelfb.feedback) {
-          for((sourceId,value) <- sourceMap) {
-            sourceMap.get(FeedbackSource.groundSource) match {
-              case Some(groundTruth) if(value.equals(groundTruth)) => {
-                val stats = sourceStats.getOrElse(sourceId,(0,0))
-                sourceStats(sourceId) = (stats._1+1,stats._2+1)
-              }  
-              case Some(groundTruth) => {
-                val stats = sourceStats.getOrElse(sourceId,(0,0))
-                sourceStats(sourceId) = (stats._1,stats._2+1)
-              }
-              case _ => {}
-            }
-          }
-        }
-        for((sourceId,stats) <- sourceStats) {
-          fbConfidence(sourceId)=stats._1/stats._2
-        }
-      })
-  }
+  // def calcConfidence() : Unit = {
+  //   val models = db.models.getAllModels
+  //   var sourceStats = scala.collection.mutable.Map[FeedbackSourceIdentifier, (Int,Int)]() // (correct,total)
+  //   db.models.getAllModels.flatMap {
+  //     case modelfb:SourcedFeedback => Some(modelfb)
+  //     case _ => None
+  //   }.map( modelfb => {
+  //       for((fbKey,sourceMap) <- modelfb.feedback) {
+  //         for((sourceId,value) <- sourceMap) {
+  //           sourceMap.get(FeedbackSource.groundSource) match {
+  //             case Some(groundTruth) if(value.equals(groundTruth)) => {
+  //               val stats = sourceStats.getOrElse(sourceId,(0,0))
+  //               sourceStats(sourceId) = (stats._1+1,stats._2+1)
+  //             }  
+  //             case Some(groundTruth) => {
+  //               val stats = sourceStats.getOrElse(sourceId,(0,0))
+  //               sourceStats(sourceId) = (stats._1,stats._2+1)
+  //             }
+  //             case _ => {}
+  //           }
+  //         }
+  //       }
+  //       for((sourceId,stats) <- sourceStats) {
+  //         fbConfidence(sourceId)=stats._1/stats._2
+  //       }
+  //     })
+  // }
   
   //map and fold implementation - runs slower
   /*var fbConfidence = Map[FeedbackSourceIdentifier, Double]()

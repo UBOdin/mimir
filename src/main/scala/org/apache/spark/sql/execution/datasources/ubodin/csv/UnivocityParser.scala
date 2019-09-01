@@ -248,6 +248,8 @@ class UnivocityParser(
     logger.trace(s"CONVERT: $tokens")
     logger.trace(s"Required Schema: $requiredSchema")
     logger.trace(s"Data Schema: $dataSchema")
+    logger.trace(s"Required Schema w/Meta: $requiredSchemaWithMeta")
+
 
     if (tokens == null) {
       /*throw BadRecordException(
@@ -261,9 +263,10 @@ class UnivocityParser(
       }
       if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_COLUMN.id)){
         row(i) = true
+        i += 1
       }
       if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id)){
-        row(i+1) = getCurrentInput
+        row(i) = getCurrentInput
       }
       logger.debug( "---> null row: " + row.toString())
       row
@@ -283,8 +286,8 @@ class UnivocityParser(
           case _: BadRecordException => {
             var i = 0
             while (i < requiredSchema.length) {
-                row(i) = null
-                i += 1
+              row(i) = null
+              i += 1
             }
             row
           }
@@ -300,14 +303,16 @@ class UnivocityParser(
       var i = 0
       val partRow = getPartialResult() 
       while (i < requiredSchema.length) {
-          row(i) = partRow.get(i, requiredSchema(i).dataType)
-          i += 1
+        row(i) = partRow.get(i, requiredSchema(i).dataType)
+        i += 1
       }
       if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_COLUMN.id)){
         row(i) = true
+        i += 1
       }
       if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id)){
-        row(i+1) = getCurrentInput
+        row(i) = getCurrentInput
+        i += 1
       }
       logger.debug( "---> partial row: " + row.toString())
       row
@@ -322,9 +327,11 @@ class UnivocityParser(
         }
         if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_COLUMN.id)){
           row(i) = false
+          i += 1
         }
         if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id)){
-          row(i+1) = null
+          row(i) = null
+          i += 1
         }
         logger.debug( "---> good row: " + row.toString())
         row
@@ -334,10 +341,16 @@ class UnivocityParser(
           // CSV reader doesn't support partial results. All fields other than the field
           // configured by `columnNameOfCorruptRecord` are set to `null`.
           //throw BadRecordException(() => getCurrentInput, () => None, e)
-            val i = requiredSchema.length
-            row(i) = true
-            row(i+1) = getCurrentInput
             logger.debug( "---> non fatal row: " + row.toString())
+            var i = requiredSchema.length
+            if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_COLUMN.id)){
+              row(i) = true
+              i += 1
+            }
+            if(requiredMeta.contains(DataSourceErrors.DATASOURCE_ERROR_ROW_COLUMN.id)){
+              row(i) = getCurrentInput
+              i += 1
+            }
             row
           }
       }

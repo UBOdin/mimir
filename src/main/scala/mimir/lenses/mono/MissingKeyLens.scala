@@ -1,10 +1,27 @@
 package mimir.lenses.mono
 
+import java.sql.SQLException
 import play.api.libs.json._
+import sparsity.Name
 
 import mimir.algebra._
 import mimir.Database
 import mimir.lenses._
+import mimir.serialization.AlgebraJson._
+import mimir.statistics.{ DetectSeries, ColumnStepStatistics }
+
+case class MissingKeyLensConfig(
+  key: ID,
+  t: Type,
+  low: PrimitiveValue,
+  high: PrimitiveValue,
+  step: PrimitiveValue
+)
+
+object MissingKeyLensConfig
+{
+  implicit val format:Format[MissingKeyLensConfig] = Json.format
+}
 
 object MissingKeyLens extends MonoLens
 {
@@ -12,16 +29,105 @@ object MissingKeyLens extends MonoLens
     db: Database,
     name: ID,
     query: Operator,
-    config: JsValue
-  ): JsValue = ???
+    configJson: JsValue
+  ): JsValue = 
+  {
+    Json.toJson(
+      configJson match {
+        case JsObject(elems) => 
+          elems.get("key") match {
+            case None | Some(JsNull) => discoverKey(db, query)
+            case Some(JsString(key)) => 
+              if(    (elems contains "low")
+                  && (elems contains "high")
+                  && (elems contains "step") ){
+                MissingKeyLensConfig(
+                  ID(key),
+                  db.typechecker.typeOf(Var(key), query),
+                  elems.get("low").get.as[PrimitiveValue],
+                  elems.get("high").get.as[PrimitiveValue],
+                  elems.get("step").get.as[PrimitiveValue]
+                )
+              } else { trainOnKey(db, query, ID(key)) }
+            case _ => throw new SQLException(s"Invalid configuration $configJson")
+          }
+        case JsString(key) => {
+          val columnLookup = OperatorUtils.columnLookupFunction(query)
+          trainOnKey(db, query, columnLookup(Name(key)))
+        }
+        case _ => throw new SQLException(s"Invalid configuration $configJson")
+      }
+    )
+  }
+
+  def discoverKey(
+    db: Database,
+    query: Operator
+  ): MissingKeyLensConfig = 
+  {
+    val candidates = DetectSeries.seriesOf(db, query)
+    if(candidates.isEmpty) { throw new SQLException("No valid key column") }
+    makeConfig(
+      candidates.minBy { _.relativeStepStddev }
+    )
+  }
+
+  def trainOnKey(
+    db: Database,
+    query: Operator,
+    key: ID
+  ): MissingKeyLensConfig = 
+  {
+    makeConfig(
+      DetectSeries.gatherStatistics(db, query, key)
+    )
+  }
+
+  def makeConfig(stats: ColumnStepStatistics): MissingKeyLensConfig =
+  {
+    MissingKeyLensConfig(
+      stats.name,
+      stats.t,
+      stats.meanStep,
+      stats.low,
+      stats.high
+    )
+
+  }
 
   def view(
     db: Database,
     name: ID,
     query: Operator,
-    config: JsValue,
+    configJson: JsValue,
     friendlyName: String
-  ): Operator = ???
+  ): Operator = 
+  {
+    val config = configJson.as[MissingKeyLensConfig]
+    val series = 
+      HardTable(
+        Seq(ID("_MIMIR_MISSING_KEY") -> config.t),
+        DetectSeries.makeSeries(config.low, config.high, config.step)
+                    .map { Seq(_) }
+      )
+    LeftOuterJoin(
+      series,
+      query.filter { Not(Var(config.key).isNull) },
+      Var("_MIMIR_MISSING_KEY").eq( Var(config.key) )
+    ).filter { 
+        Caveat(
+          name,
+          BoolPrimitive(true),
+          Seq(Var("_MIMIR_MISSING_KEY")),
+          Function(ID("concat"),Seq(
+            StringPrimitive("Injected missing key: "),
+            Var("_MIMIR_MISSING_KEY").as(TString())
+          ))
+        )
+      }
+     .removeColumnsByID(config.key)
+     .renameByID(ID("_MIMIR_MISSING_KEY") -> config.key)
+  }
 }
 
 // package mimir.lenses

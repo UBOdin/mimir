@@ -1,28 +1,40 @@
 package mimir.statistics
 
+import java.sql.SQLException
+import java.sql.Date
+import java.sql.Timestamp
+
+import scala.collection.mutable.ArrayBuffer
+import scala.collection._
+import org.joda.time.{DateTime, Seconds, Days, Period, Duration}
+
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions.{min, max, sum, mean, stddev, col, lead, lag, abs, lit, isnull, not, desc, unix_timestamp, datediff, floor}       
+import org.apache.spark.sql.Encoders
+import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.types.LongType
+import org.apache.spark.sql.types.DoubleType
+import org.apache.spark.sql.functions.{desc, asc, col}
+
 import mimir.Database
 import mimir.algebra._
 import mimir.ctables._
 import mimir.parser._
 import mimir.sql._
 import mimir.util._
-import org.joda.time.{DateTime, Seconds, Days, Period, Duration}
-
-import scala.collection.mutable.ArrayBuffer
-import scala.collection._
-import org.apache.spark.sql.expressions.Window
 import mimir.exec.spark.RAToSpark
-import org.apache.spark.sql.functions.{sum, mean, stddev, col, lead, lag, abs, lit, isnull, not, desc, unix_timestamp, datediff, floor}       
-import org.apache.spark.sql.Encoders
-import mimir.models.SeriesColumnItem
-import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.types.LongType
-import org.apache.spark.sql.types.DoubleType
-import org.apache.spark.sql.functions.{desc, asc, col}
+
     
 
-
+case class ColumnStepStatistics(
+  name: ID,
+  t: Type,
+  meanStep: PrimitiveValue,
+  relativeStepStddev: Double,
+  low: PrimitiveValue,
+  high: PrimitiveValue
+)
 
 /** 
  *  DetectSeries
@@ -34,49 +46,104 @@ import org.apache.spark.sql.functions.{desc, asc, col}
  */
 object DetectSeries
 { 
-  def seriesOf(queryDf:DataFrame, querySchema:Seq[(ID, Type)], threshold: Double): Dataset[SeriesColumnItem] = {
+  def VALID_SEQUENCE_TYPES = Set[Type](
+    TInt(),
+    TFloat(),
+    TDate(),
+    TTimestamp()
+  )
 
-    
-    // Date columns are automatically series
-    val seriesColumnDate = querySchema.flatMap( tup => 
-      tup._2 match{
-        case TDate() | TTimestamp() =>  Some(SeriesColumnItem(tup._1, "The column is a "+tup._2.toString()+" datatype.", 1.0))
-        case _ => None
-      }
+  def seriesOf(
+    db: Database,
+    query: Operator
+  ): Seq[ColumnStepStatistics] = 
+    seriesOf(
+      db.compiler.compileToSparkWithRewrites(query),
+      db.typechecker.schemaOf(query)
     )
 
+  def seriesOf(
+    queryDf:DataFrame, 
+    querySchema:Seq[(ID, Type)]
+  ): Seq[ColumnStepStatistics] = {
+
+    val candidateColumns: Seq[(ID, Type)] = 
+      querySchema.filter { VALID_SEQUENCE_TYPES contains _._2 }
     
-    // Numeric columns *might* be series
-    // Currently test for the case where the inter-query spacing is (mostly) constant.
-    // i.e., 1, 2, 3, 4, 5.1, 5.9, ...
-    val seriesColumnNumeric: Seq[(ID, Type)] = querySchema.filter(tup => Seq(TInt(),TFloat()).contains(tup._2)).toSeq
+    candidateColumns.map { case (column, t) =>
+      gatherStatistics(queryDf, column, t)
+    }
+  }
+
+  def gatherStatistics(
+    db: Database,
+    query: Operator,
+    column: ID
+  ):ColumnStepStatistics = 
+    gatherStatistics(
+      db.compiler.compileToSparkWithRewrites(query),
+      column,
+      db.typechecker.typeOf(Var(column), query)
+    )
+
+  def gatherStatistics(
+    queryDf: DataFrame,
+    column: ID,
+    t: Type
+  ):ColumnStepStatistics = 
+  {
+    val windowSpec = 
+      Window.partitionBy(lit(0))
+            .orderBy(col("curr"))  
     
-    val scnf = seriesColumnNumeric.map(tup => (tup._1, tup._2.toString()))
-    val thresh = threshold
-    
-    val dataframes = seriesColumnNumeric
-      .map { x => queryDf.sort(asc(x._1.id)).select(x._1.id) }
-      
-      (dataframes.zipWithIndex.foldLeft(queryDf.sparkSession.createDataset(seriesColumnDate.toSeq)(org.apache.spark.sql.Encoders.kryo[SeriesColumnItem]))( (init, curr) => {
-        val (dataframe, idx) = curr
-        val rowWindowSpec = Window.partitionBy(lit(0)).orderBy(dataframe.columns(0))  
-        val rowWindowDf = dataframe.withColumn("next", lag(dataframe.columns(0), 1).over(rowWindowSpec))
-        val diffDf = rowWindowDf.withColumn("diff", rowWindowDf.col(rowWindowDf.columns(0))-rowWindowDf.col(rowWindowDf.columns(1)))
-        val meanStdDevRelStddevDf = diffDf.agg(mean("diff").alias("mean"), stddev("diff").alias("stddev")).withColumn("relstddev", col("stddev") / col("mean"))
-        init.union( meanStdDevRelStddevDf.flatMap( dfrow => {
-          val relativeStdDev = dfrow.getDouble(2)
-          if(relativeStdDev < thresh) {
-            Some (
-              SeriesColumnItem(
-                scnf(idx)._1, 
-                s"The column is a Numeric (${scnf(idx)._2}) datatype with an effective increasing pattern.", 
-                if((1-relativeStdDev)<0){ 0 } else { 1-relativeStdDev }
+    val results = 
+      queryDf.select(column.id)
+             .withColumnRenamed(column.id, "curr")
+             .withColumn("prev", lag(col("curr"), 1)
+                                    .over(windowSpec))
+             .withColumn("diff", col("curr") - col("prev"))
+             .agg(
+                mean("diff").alias("step_mean"),
+                stddev("diff").alias("step_stddev"),
+                min("prev").alias("low"),
+                max("curr").alias("high")
               )
-            )
-          }
-          else None
-        })(org.apache.spark.sql.Encoders.kryo[SeriesColumnItem]))
-      }))
+             .withColumn("step_relstddev", col("step_stddev") / col("step_mean"))
+             .head
+
+    val getDelta: (String => PrimitiveValue) =
+      t match {
+        case TInt() => 
+          { (v:String) => IntPrimitive(results.getAs[Long](v)) }
+        case TFloat() => 
+          { (v:String) => FloatPrimitive(results.getAs[Long](v)) }
+        case TDate() | TTimestamp() => 
+          { (v:String) => IntervalPrimitive(results.getAs[Period](v)) }
+        case _ => 
+          throw new SQLException(s"Unsupported sequence column type $t")
+      }
+    val getValue: (String => PrimitiveValue) =
+      t match {
+        case TInt() => 
+          { (v:String) => IntPrimitive(results.getAs[Long](v)) }
+        case TFloat() => 
+          { (v:String) => FloatPrimitive(results.getAs[Long](v)) }
+        case TDate() => 
+          { (v:String) => SparkUtils.convertDate(results.getAs[Date](v)) }
+        case TTimestamp() => 
+          { (v:String) => SparkUtils.convertTimestamp(results.getAs[Timestamp](v)) }
+        case _ => 
+          throw new SQLException(s"Unsupported sequence column type $t")
+      }
+
+    ColumnStepStatistics(
+      column,
+      t,
+      getDelta("step_mean"),
+      results.getAs[Double]("step_relstddev"),
+      getValue("low"),
+      getValue("high")
+    )
   }
 
   def ratio(low: PrimitiveValue, mid: PrimitiveValue, high: PrimitiveValue): Double =
@@ -136,77 +203,33 @@ object DetectSeries
         throw new RAException(s"Can't interpolate [ $lt - $ht ]")
     }
   }
-  
-  //def bestMatchSeriesColumn(colName: String, colType: Type, queryDf:DataFrame, querySchema:Seq[(String, Type)]): Dataset[(String,Double)] = 
-  //  bestMatchSeriesColumn(colName, colType, queryDf, querySchema, seriesOf(queryDf, querySchema, 0.2))
-  def bestMatchSeriesColumn(
-    colName: ID, 
-    colType: Type, 
-    queryDf:DataFrame, 
-    querySchema:Seq[(ID, Type)], 
-    threshold:Double = 0.2
-  ): Dataset[(ID,Double)] = {
-    //bestMatchSeriesColumn(db, colName, colType, query, seriesOf(db, query, 0.2))
-      
-    // Date columns are automatically series
-    val seriesColudmnDate : Seq[(ID, Type)] = querySchema.filter(tup => Seq(TDate(),TTimestamp()).contains(tup._2) && !tup._1.equals(colName)).toSeq
+  def makeSeries(
+    low: PrimitiveValue, 
+    high: PrimitiveValue, 
+    step: PrimitiveValue
+  ): Seq[PrimitiveValue] =
+  {
+    val lowIsBiggerThanHigh = Eval.applyCmp(Cmp.Gt, low, high).asBool
+    val stepIsNegative = Eval.applyCmp(Cmp.Gt, low,
+                            Eval.applyArith(Arith.Add, low, step)).asBool
+    val (start, end) = 
+      if((lowIsBiggerThanHigh || stepIsNegative) 
+          && (lowIsBiggerThanHigh != stepIsNegative)){
+        // flip if low is bigger than high, OR if stepIsNegative, but not both
+        (high, low)
+      } else { 
+        (low, high) 
+      }
+    val terminalCmp = if(stepIsNegative){ Cmp.Gte } else { Cmp.Lte }
 
-    
-    // Numeric columns *might* be series
-    // Currently test for the case where the inter-query spacing is (mostly) constant.
-    // i.e., 1, 2, 3, 4, 5.1, 5.9, ...
-    val seriesColumnNumeric: Seq[(ID, Type)] = querySchema.filter(tup => Seq(TInt(),TFloat()).contains(tup._2) && !tup._1.equals(colName)).toSeq
-    
-    val scnf = (seriesColumnNumeric ++ seriesColudmnDate).map(tup => (tup._1, tup._2.toString()))
-    val dataframes = 
-      seriesColumnNumeric.map { x => queryDf.sort(asc(x._1.id)).select(x._1.id) }  ++ 
-      seriesColudmnDate.map { x => queryDf.sort(asc(x._1.id)).select(x._1.id) }
-      
-      dataframes.foreach(df => df.cache())
-      
-      (dataframes.zipWithIndex.foldLeft(queryDf.sparkSession.createDataset(Seq())(Encoders.product[(ID,Double)]))( (init, curr) => {
-        val (dataframe, idx) = curr
-        val seriesColumnName = scnf(idx)._1
-        val curTypes = (querySchema.toMap.getOrElse(seriesColumnName,TInt()), colType)
-        val relativeStdDev = if(idx < seriesColumnNumeric.length){
-          val rowWindowSpec = Window.partitionBy(lit(0)).orderBy(dataframe.columns(0))  
-          val rowWindowDf = dataframe.withColumn("next", lead(dataframe.columns(0), 1).over(rowWindowSpec)).na.drop
-          val diffDf = rowWindowDf.withColumn("diff", rowWindowDf.col(rowWindowDf.columns(0))-rowWindowDf.col(rowWindowDf.columns(1)))
-          val meanStdDevRelStddevDf = diffDf.agg(mean("diff").alias("mean"), stddev("diff").alias("stddev")).withColumn("relstddev", abs(col("stddev").divide( col("mean"))))
-          val dfrow = meanStdDevRelStddevDf.head
-          val relStdDevIdx = dfrow.fieldIndex("relstddev")
-          if(dfrow.isNullAt(relStdDevIdx)) Double.MaxValue else dfrow.getDouble(relStdDevIdx)
-        } else 0.0
-        if(relativeStdDev < threshold  ) {
-          val rowWindowSpeci = Window.partitionBy(lit(0)).orderBy(queryDf.col(seriesColumnName.id))  
-          val rowWindowDfi = queryDf.sort(desc(seriesColumnName.id)).filter(not(isnull(col(seriesColumnName.id)))).select(col(seriesColumnName.id), col(colName.id))
-                              .withColumn("prev0", lag(col(seriesColumnName.id), 1).over(rowWindowSpeci))
-                              .withColumn("next0", lead(col(seriesColumnName.id), 1).over(rowWindowSpeci))
-                              .withColumn("prev1", lag(col(colName.id), 1).over(rowWindowSpeci))
-                              .withColumn("next1", lead(col(colName.id), 1).over(rowWindowSpeci))
-          val scaleDf = curTypes match {
-            //case (TDate(), _) => rowWindowDfi.na.drop.withColumn("ratio", datediff(col("prev0"), col(seriesColumnName)) / datediff(col("prev0"), col("next0")))
-            case (TDate() | TTimestamp(),_) => {
-              rowWindowDfi.na.drop.withColumn("ratio", ( col("prev0") - col(seriesColumnName.id)) / (col("prev0")- col("next0")))
-            }
-            case _ => rowWindowDfi.na.drop.withColumn("ratio", (col(seriesColumnName.id) - col("prev0")) / (col("next0") - col("prev0")))
-          } 
-          val predictedDf = curTypes match {
-            //case (_, TDate() | TTimestamp()) => scaleDf.withColumn("interpolate", datediff(col("prev1"), col("next1")) / (lit(1.0)/col("ratio")))
-            case (_, TTimestamp() | TDate()) => {
-              scaleDf.withColumn("interpolate", col("prev1") + ((col("prev1")-col("next1")) / (lit(1.0)/col("ratio"))))
-            }
-            case _ => scaleDf.withColumn("interpolate", (col("next1") - col("prev1")) * col("ratio") + col("prev1"))                     
-          }
-          val outDfi = predictedDf.withColumn("actual", col(colName.id))
-                          .withColumn("error", abs((col(colName.id) - col("interpolate"))))
-                          .agg(sum("error").alias("error_sum"), sum("actual").alias("actual_sum"))               
-                          .withColumn("result", (col("error_sum") / col("actual_sum")))
-                          .select("result")
-                          .withColumn("sname", lit(seriesColumnName.id))
-          init.union( outDfi.na.drop.map(row => (ID(row.getString(1)), row.getDouble(0)))(Encoders.product[(ID,Double)]))  
-        }
-        else init
-      }))    
+    return new Iterator[PrimitiveValue] {
+      var curr = start
+      def hasNext = Eval.applyCmp(terminalCmp, curr, end).asBool
+      def next: PrimitiveValue = {
+        val ret = curr
+        curr = Eval.applyArith(Arith.Add, curr, step)
+        return ret
+      }
+    }.toSeq
   }
 }

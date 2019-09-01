@@ -90,4 +90,7 @@ trait ExpressionConstructors
   
   def not: Expression =
     ExpressionUtils.makeNot(toExpression)
+
+  def as(t:Type): Expression =
+    CastExpression(toExpression, t)
 }

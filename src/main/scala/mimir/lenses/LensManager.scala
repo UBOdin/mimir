@@ -25,15 +25,16 @@ class LensManager(db: Database)
   val lensTypes = Map[ID,Lens](
     ID("TYPE_INFERENCE")    -> CastColumnsLens,
     ID("GUESS_TYPES")       -> CastColumnsLens,
-    ID("DETECT_HEADERS")    -> DetectHeadersLens,
+    ID("DETECT_HEADER")     -> DetectHeadersLens,
     ID("MISSING_VALUE")     -> DomainLens,
     ID("DOMAIN")            -> DomainLens,
     ID("KEY_REPAIR")        -> RepairKeyLens,
     ID("REPAIR_KEY")        -> RepairKeyLens,
-
     ID("COMMENT")           -> CommentLens,
-    ID("MISSING_KEY")       -> MissingKeyLens,
+    ID("DATASOURCE_ERRORS") -> DataSourceErrors,
     ID("PICKER")            -> MergeColumnLens,
+    ID("MISSING_KEY")       -> MissingKeyLens,
+
     ID("MERGE_COLUMNS")     -> MergeColumnLens,
     ID("GEOCODE")           -> GeocodingLens
   )

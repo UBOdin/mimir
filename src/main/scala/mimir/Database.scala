@@ -116,7 +116,6 @@ case class Database(
 
   //// Data Sources
   val lenses          = new mimir.lenses.LensManager(this)
-  val models          = new mimir.models.ModelManager(this)
   val loader          = new mimir.data.LoadedTables(this)
   val views           = new mimir.views.ViewManager(this)
   val tempViews       = new mimir.views.TemporaryViewManager(this)
@@ -136,8 +135,7 @@ case class Database(
   val uncertainty     = new mimir.ctables.AnalyzeUncertainty(this)
   val typechecker     = new mimir.algebra.Typechecker(
                                   functions = Some(functions), 
-                                  aggregates = Some(aggregates),
-                                  models = Some(models)
+                                  aggregates = Some(aggregates)
                                 )
   val interpreter     = new mimir.algebra.Eval(
                                   functions = Some(functions)
@@ -205,19 +203,7 @@ case class Database(
       case _:DrawPlot     => throw new SQLException("Can't evaluate DRAW PLOT as an update")
 
       /********** FEEDBACK STATEMENTS **********/
-      case feedback: Feedback => {
-        val model = models.get(ID.upper(feedback.model))
-        val args =
-          feedback.args
-            .map { case p:sparsity.expression.PrimitiveValue => sqlToRA(p)
-                   case v => throw new SQLException(s"Invalid Feedback Argument '$v'") }
-            .zip( model.argTypes(feedback.index.toInt) )
-            .map { case (v, t) => Cast(t, v) }
-        val v = sqlToRA(feedback.value)
-
-        model.feedback(feedback.index.toInt, args, v)
-        models.persist(model)
-      }
+      case feedback: Feedback => ???
 
       /********** CREATE TABLE STATEMENTS **********/
       case SQLStatement(create: CreateTable) => {

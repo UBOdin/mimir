@@ -20,7 +20,6 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 class GeocodingModel(override val name: ID, addrCols:Seq[Expression], geocoder:ID, apiKey:String, source: Operator) 
   extends Model(name) 
   with Serializable
-  with NeedsReconnectToDatabase
   with ModelCache
   with SourcedFeedback
   with FiniteDiscreteDomain

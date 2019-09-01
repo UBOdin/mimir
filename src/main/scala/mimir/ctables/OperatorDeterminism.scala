@@ -38,93 +38,7 @@ object OperatorDeterminism
     }
   }
 
-  // def partition(oper: Project): Operator = {
-  //   val cond = oper.get(CTables.conditionColumn).get
-  //   var otherClausesOp: Operator = null
-  //   var missingValueClausesOp: Operator = null
-  //   var detExpr: List[Expression] = List()
-  //   var nonDeterExpr: List[Expression] = List()
 
-
-  //   val (missingValueClauses, otherClauses) =
-  //     splitArith(cond).partition { (p) =>
-  //       p match {
-  //         case Comparison(_, lhs, rhs) => isMissingValueExpression(lhs) || isMissingValueExpression(rhs)
-  //         case _ => false
-  //       }
-  //     }
-
-  //   missingValueClauses.foreach{ (e) =>
-  //     e match {
-  //       case Comparison(op, lhs, rhs) =>
-  //         var lhsExpr = lhs
-  //         var rhsExpr = rhs
-
-  //         if (isMissingValueExpression(lhs)) {
-  //           val lhsVar = extractMissingValueVar(lhs)
-  //           lhsExpr = lhsVar
-  //           detExpr ++= List(Not(IsNullExpression(lhsVar)))
-  //           nonDeterExpr ++= List(IsNullExpression(lhsVar))
-  //         }
-  //         if (isMissingValueExpression(rhs)) {
-  //           val rhsVar = extractMissingValueVar(rhs)
-  //           rhsExpr = rhsVar
-  //           detExpr ++= List(Not(IsNullExpression(rhsVar)))
-  //           nonDeterExpr ++= List(IsNullExpression(rhsVar))
-  //         }
-
-  //         detExpr ++= List(Comparison(op, lhsExpr, rhsExpr))
-
-  //       case _ => throw new SQLException("Missing Value Clauses must be Comparison expressions")
-  //     }
-  //   }
-
-  //   missingValueClausesOp = Union(
-  //     removeConstraintColumn(oper).rebuild(List(Select(detExpr.distinct.reduce(ExpressionUtils.makeAnd(_, _)), oper.children().head))),
-  //     oper.rebuild(List(Select(nonDeterExpr.distinct.reduce(ExpressionUtils.makeOr(_, _)), oper.children().head)))
-  //   )
-
-  //   if(otherClauses.nonEmpty)
-  //     otherClausesOp = Project(
-  //       oper.columns.filterNot { 
-  //         p => p.name.equals(CTables.conditionColumn)
-  //       } ++ List(
-  //         ProjectArg(
-  //           CTables.conditionColumn, 
-  //           otherClauses.reduce(
-  //             ExpressionUtils.makeAnd(_, _)
-  //           )
-  //         )
-  //       ),
-  //       oper.source
-  //     )
-
-  //   (otherClausesOp, missingValueClausesOp) match {
-  //     case (null, null) => throw new SQLException("Both partitions null")
-
-  //     case (null, y) => y
-
-  //     case (x, null) => x
-
-  //     case (x, y) => Union(x, y)
-  //   }
-  // }
-
-  /**
-   * Break up the conditions in the constraint column
-   * into deterministic and non-deterministic fragments
-   * ACCORDING to the data
-   */
-  // def partitionConstraints(oper: Operator): Operator = {
-  //   oper match {
-  //     case proj@Project(cols, src) 
-  //           if cols.exists { _.name.equals(CTables.conditionColumn) }
-  //         => partition(proj)
-
-  //     case _ =>
-  //       oper
-  //   }
-  // }
 
   /**
    * Rewrite the input operator to evaluate a 'provenance lite'
@@ -138,11 +52,11 @@ object OperatorDeterminism
    * The return value is just the rewritten operator itself.  Determinism
    * column names can be inferred from the pre-operator schema.
    */
-  def compile(oper: Operator, models: (ID => Model)): Operator =
+  def compile(oper: Operator): Operator =
   {
     oper match {
       case Project(columns, src) => {
-        val rewritten = compile(src, models)
+        val rewritten = compile(src)
 
         logger.trace(s"PERCOLATE: $oper")
         logger.trace(s"GOT INPUT: $rewritten")
@@ -174,7 +88,7 @@ object OperatorDeterminism
       }
 
       case Aggregate(groupBy, aggregates, src) => {
-        val rewritten = compile(src, models)
+        val rewritten = compile(src)
 
         // An aggregate value is is deterministic when...
         //  1. All of its inputs are deterministic (all columns referenced in the expr are det)
@@ -253,7 +167,7 @@ object OperatorDeterminism
       }
 
       case Select(cond, src) => {
-        val rewritten = compile(src, models);
+        val rewritten = compile(src);
 
         val inputColDeterminism = 
           src.columnNames.map { col => 
@@ -277,14 +191,14 @@ object OperatorDeterminism
       case Union(left, right) => 
       {
         return Union(
-          compile(left, models),
-          compile(right, models)
+          compile(left),
+          compile(right)
         )
       }
       case Join(left, right) =>
       {
-        val rewrittenLeft = compile(left, models);
-        val rewrittenRight = compile(right, models);
+        val rewrittenLeft = compile(left);
+        val rewrittenRight = compile(right);
         logger.trace(s"JOIN:\n$left\n$right")
         logger.trace(s"INTO:\n$rewrittenLeft\n$rewrittenRight")
 
@@ -311,7 +225,7 @@ object OperatorDeterminism
       case View(name, query, metadata) => {
         View(
           name,
-          compile(query, models),
+          compile(query),
           metadata + ViewAnnotation.TAINT
         )
       }
@@ -331,7 +245,7 @@ object OperatorDeterminism
         LensView(
           lens, 
           name, 
-          compile(query, models), 
+          compile(query), 
           metadata + ViewAnnotation.TAINT
         )
       }
@@ -342,15 +256,15 @@ object OperatorDeterminism
       // annoying behavior.  Since we're rewriting this particular fragment soon, 
       // I'm going to hold off on any elegant solutions
       case Sort(sortCols, src) => 
-        Sort(sortCols, compile(src, models))
+        Sort(sortCols, compile(src))
       case Limit(offset, count, src) => 
-        Limit(offset, count, compile(src, models))
+        Limit(offset, count, compile(src))
 
       // This is also a bit hackish.  We're not accounting for uncertain
       // tuples on the RHS.  TODO: fixme
       case LeftOuterJoin(lhs, rhs, cond) => {
-        val rewrittenLeft = compile(lhs, models);
-        val rewrittenRight = compile(rhs, models);
+        val rewrittenLeft = compile(lhs);
+        val rewrittenRight = compile(rhs);
         logger.trace(s"JOIN:\n$lhs\n$rhs")
         logger.trace(s"INTO:\n$rewrittenLeft\n$rewrittenRight")
 
