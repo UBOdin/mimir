@@ -34,22 +34,36 @@ object DetectHeadersLens
   ): JsValue =
   {
     // Use this opportunity to validate the config
-    val configRaw = configJson.as[Map[String,JsValue]]
+    val configRaw:Map[String, JsValue] = 
+      configJson match {
+        case j:JsObject => j.as[Map[String,JsValue]]
+        case JsNull => Map()
+        case _ => throw new SQLException(s"Invalid lens configuration: $configJson")
+      }
+
+    logger.debug(s"Input config: $configRaw")
 
     val isAGuess = configRaw.getOrElse("guess", JsBoolean(true)).as[Boolean]
 
-    if( isAGuess ){
-      val header = detectHeaderRow(db, query)
-      Json.toJson(
+    val newConfig = 
+      if( isAGuess ){
+        logger.debug("Checking for presence of headers")
+        val header = detectHeaderRow(db, query)
+
         DetectHeadersLensConfig(
           header.map { _._1 },
           header.map { _._2 },
           true
         )
-      )
-    } else {
-      configJson
-    }
+      } else {
+        DetectHeadersLensConfig(
+          None,
+          None,
+          false
+        )
+      }
+
+    return Json.toJson(newConfig)
   }
 
   private def detectHeaderRow(
@@ -68,12 +82,16 @@ object DetectHeadersLens
                .toIndexedSeq
       }
 
+    logger.debug(s"Got ${headRecords.size} sample records")
+
     if(headRecords.isEmpty){ return None }
 
     // The first row is potentially the header
     val header = headRecords.head._2
     // If it is the header, we want its rowID
     val headerRowid = headRecords.head._1
+
+    logger.debug(s"Possible header (id = $headerRowid): < ${header.mkString(", ")} >")
 
     // For non-first rows, we need to know their types
     val topRecordVotedTypes: Seq[Type] = 
@@ -88,7 +106,10 @@ object DetectHeadersLens
           }
           .foldLeft(CastColumnsVoteList.zero)
             { (acc, row) => CastColumnsVoteList.reduce(acc, row) }
-      ).map { _._2.headOption match { case Some((bestVote, _)) => bestVote; case None => TAny() } }
+      ).map { _._2.headOption match { case Some((bestVote, _)) => Type.fromIndex(bestVote)
+                                      case None => TAny() } }
+
+    logger.debug(s"Detected types: < ${topRecordVotedTypes.mkString(", ")} >")
 
     // Find any "header" columns with duplicate names.  Dump them into a
     // mutable map that we can use to rename them COLNAME_#
@@ -104,12 +125,16 @@ object DetectHeadersLens
                 .map { case (colname, _) => (colname -> 0) }
         ).toSeq: _*)
 
+    logger.debug(s"Duplicated header columns: $duplicateHeaderColumns")
+
     // In some rare cases, we might not be getting any type information for certain columns.  This 
     // makes it harder to determine whether a header is there, so at the very least, detect this
     // case and dump out some debugging text
     val columnsWithNoType = 
       topRecordVotedTypes.zipWithIndex
                          .collect { case (TAny(), idx) => idx }
+
+    logger.debug(s"Untyped columns: $columnsWithNoType")
 
     // Throw some quick heuristic regexps at the potential header names to figure out if they "seem" 
     // right.
@@ -119,13 +144,23 @@ object DetectHeadersLens
             .map { _._2 }
             .toSet
 
+    logger.debug(s"Columns with a reasonable header name: $goodHeaderColumnIndexes")
+
     // Figure out if any of the header columns don't match the detected types
     val typeMismatchHeaderColumnIndexes =
       header.zip(topRecordVotedTypes)
             .zipWithIndex
-            .filter { case ((col, t), idx) => Cast(t, col).equals(NullPrimitive()) } 
+            .filter { 
+              // If the rest of the column is null, a non-null header is a mismatch
+              case ((NullPrimitive(), TAny()), _) => false 
+              case ((_, TAny()), _) => true 
+              // Otherwise test for castability
+              case ((col, t), idx) => Cast(t, col).equals(NullPrimitive()) 
+            } 
             .map { _._2 }
             .toSet
+
+    logger.debug(s"Columns with headers that don't match the type: $goodHeaderColumnIndexes")
 
     // Invert the union of the above two sets
     val badHeaderColumnIndexes = (
@@ -133,11 +168,10 @@ object DetectHeadersLens
                                     -- typeMismatchHeaderColumnIndexes
     )
 
-    logger.debug(
-      s"header: ${header.mkString(",")}\nheader dups: ${duplicateHeaderColumns.mkString("[",",","]")}\nconflicts: ${columnsWithNoType.mkString("[",",","]")}\ngood: ${goodHeaderColumnIndexes.mkString("[",",","]")}\nmismatch: ${typeMismatchHeaderColumnIndexes.mkString("[",",","]")}\nbad: ${badHeaderColumnIndexes.mkString("[",",","]")}"
-    )
+    logger.debug(s"Columns with first rows that probably aren't a header: $badHeaderColumnIndexes")
 
     if(badHeaderColumnIndexes.isEmpty){
+      logger.debug("There probably is a header on this table")
       val columnNames = 
         header.zipWithIndex
               .map { 
@@ -151,6 +185,7 @@ object DetectHeadersLens
               }
       return Some((headerRowid, columnNames))
     } else {
+      logger.debug("There probably is not a header on this table")
       return None
     }
   }

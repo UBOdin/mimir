@@ -8,7 +8,13 @@ object StringFunctions
   def register(fr: FunctionRegistry)
   {
     fr.register(ID("concat"), 
-      (params: Seq[PrimitiveValue]) => StringPrimitive(params.map( _.asString ).mkString),
+      (params: Seq[PrimitiveValue]) => 
+        StringPrimitive(
+            params.map { 
+              case NullPrimitive() => "[null]"
+              case x => x.asString
+            }.mkString
+        ),
       (x: Seq[Type]) => TString()
     )
 

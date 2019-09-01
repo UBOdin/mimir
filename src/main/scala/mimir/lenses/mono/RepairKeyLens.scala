@@ -1,10 +1,22 @@
 package mimir.lenses.mono
 
+import java.sql.SQLException
 import play.api.libs.json._
+import sparsity.Name
 
 import mimir.algebra._
 import mimir.Database
 import mimir.lenses._
+
+case class RepairKeyLensConfig(
+  key: ID,
+  weight: Option[ID]
+)
+
+object RepairKeyLensConfig
+{
+  implicit val format: Format[RepairKeyLensConfig] = Json.format
+}
 
 object RepairKeyLens extends MonoLens
 {
@@ -13,7 +25,27 @@ object RepairKeyLens extends MonoLens
     name: ID,
     query: Operator,
     config: JsValue
-  ): JsValue = ???
+  ): JsValue = 
+  {
+    val columnLookup = OperatorUtils.columnLookupFunction(query)
+    val configCandidate:RepairKeyLensConfig = 
+      config match {
+        case JsNull => RepairKeyLensConfig(detectKey(db, query), None)
+        case JsObject(_) => config.as[RepairKeyLensConfig]
+        case JsString(s) => RepairKeyLensConfig(columnLookup(Name(s)), None)
+        case _ => throw new SQLException(s"Invalid lens configuration $config")
+      }
+
+    Json.toJson(configCandidate)
+  }
+
+  def detectKey(
+    db: Database,
+    query: Operator
+  ): ID =
+  {
+    ???
+  }
 
   def view(
     db: Database,

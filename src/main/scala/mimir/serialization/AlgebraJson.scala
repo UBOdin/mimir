@@ -105,7 +105,7 @@ object AlgebraJsonCodecs
 
       case LensView(lens, name, query, annotations) => 
         JsObject(Map[String,JsValue](
-          "type" -> JsString("table_adaptive"),
+          "type" -> JsString("table_lens"),
           "lens" -> (lens match { case Some(multi) => JsString(multi.id); case None => JsNull }),
           "name" -> JsString(name.id),
           "query" -> ofOperator(query),
@@ -246,10 +246,12 @@ object AlgebraJsonCodecs
             ViewAnnotation.withName(annot.asInstanceOf[JsString].value)
           }.toSet
         )
-      case "table_adaptive" =>
+      case "table_lens" =>
         LensView(
-          elems.get("lens")
-               .map { _.as[ID] },
+          elems.get("lens") match {
+            case None | Some(JsNull) => None
+            case Some(x) => Some(x.as[ID])
+          },
           ID(elems("name").asInstanceOf[JsString].value),
           toOperator(elems("query")),
           elems("annotations").asInstanceOf[JsArray].value.map { annot =>
@@ -495,27 +497,39 @@ object AlgebraJson {
   implicit val writesOperator = 
     new Writes[Operator]{ def writes(o:Operator) = AlgebraJsonCodecs.ofOperator(o) }
   implicit val readsType: Reads[Type] = 
-    JsPath.read[JsObject].map { AlgebraJsonCodecs.toType(_) }
+    JsPath.read[JsString].map { AlgebraJsonCodecs.toType(_) }
   implicit val writesType = 
     new Writes[Type]{ def writes(t:Type) = AlgebraJsonCodecs.ofType(t) }
 
-  implicit val intPrimitiveReads   : Reads[IntPrimitive   ] = JsPath.read[Long]  .map { IntPrimitive(_) }
-  implicit val floatPrimitiveReads : Reads[FloatPrimitive ] = JsPath.read[Double].map { FloatPrimitive(_) }
-  implicit val stringPrimitiveReads: Reads[StringPrimitive] = JsPath.read[String].map { StringPrimitive(_) }
-  implicit val typePrimitiveReads  : Reads[TypePrimitive  ] = JsPath.read[String].map { Type.fromString(_) }.map { TypePrimitive(_) }
-  implicit val rowidPrimitiveReads : Reads[RowIdPrimitive ] = JsPath.read[String].map { RowIdPrimitive(_) }
+  implicit val intPrimitiveReads   : Reads[IntPrimitive   ] = 
+    JsPath.read[Long]  .map { IntPrimitive(_) } or
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[IntPrimitive] }
+  implicit val floatPrimitiveReads : Reads[FloatPrimitive ] = 
+    JsPath.read[Double].map { FloatPrimitive(_) } or 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[FloatPrimitive] }
+  implicit val stringPrimitiveReads: Reads[StringPrimitive] = 
+    JsPath.read[String].map { StringPrimitive(_) } or 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[StringPrimitive] }
+  implicit val typePrimitiveReads  : Reads[TypePrimitive  ] = 
+    JsPath.read[String].map { Type.fromString(_) }.map { TypePrimitive(_) } or 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[TypePrimitive ] }
+  implicit val rowidPrimitiveReads : Reads[RowIdPrimitive ] = 
+    JsPath.read[String].map { RowIdPrimitive(_) } or 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[RowIdPrimitive] }
   implicit val boolPrimitiveReads  : Reads[BoolPrimitive] = (
-    JsPath.read[Boolean] or
+    JsPath.read[Boolean].map { BoolPrimitive(_) } or
     JsPath.read[String].map { _.toLowerCase }.map { 
-      case "yes" | "true" => true
-      case "no" | "false" => false
-    }
-  ).map { BoolPrimitive(_) }
+      case "yes" | "true" => BoolPrimitive(true)
+      case "no" | "false" => BoolPrimitive(false)
+    } or 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[BoolPrimitive] }
+  )
   implicit val datePrimitiveReads  : Reads[DatePrimitive] = (
     (JsPath \ "year").read[Int] and
     (JsPath \ "month").read[Int] and
     (JsPath \ "date").read[Int]
-  )( DatePrimitive.apply _ )
+  )( DatePrimitive.apply _ ) or 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[DatePrimitive] }
   implicit val timePrimitiveReads  : Reads[TimestampPrimitive] = (
     (JsPath \ "year").read[Int] and
     (JsPath \ "month").read[Int] and
@@ -524,7 +538,8 @@ object AlgebraJson {
     (JsPath \ "min").readNullable[Int].map { _.getOrElse(0) } and
     (JsPath \ "sec").readNullable[Int].map { _.getOrElse(0) } and
     (JsPath \ "msec").readNullable[Int].map { _.getOrElse(0) }
-  )( TimestampPrimitive.apply _ )
+  )( TimestampPrimitive.apply _ ) or 
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[TimestampPrimitive] }
   implicit val primitiveValueReads : Reads[PrimitiveValue] = (
     JsPath.read[FloatPrimitive].map { _.asInstanceOf[PrimitiveValue] } or 
     JsPath.read[Boolean].map { BoolPrimitive(_).asInstanceOf[PrimitiveValue] } or 
@@ -532,30 +547,32 @@ object AlgebraJson {
     JsPath.read[StringPrimitive].map { _.asInstanceOf[PrimitiveValue] }
   )
 
-  implicit val primitiveValueWrites = new Writes[PrimitiveValue] { def writes(p:PrimitiveValue) = p match {
-    case _:NullPrimitive => JsNull
-    case x:IntPrimitive => JsNumber(x.v)
-    case x:FloatPrimitive => JsNumber(x.v)
-    case x:StringPrimitive => JsString(x.v)
-    case x:TypePrimitive => JsString(x.t.toString)
-    case x:RowIdPrimitive => JsString(x.v)
-    case x:BoolPrimitive => JsBoolean(x.v)
-    case DatePrimitive(y, m, d) => JsObject(Map[String,JsValue](
-      "year" -> JsNumber(y),
-      "month" -> JsNumber(m),
-      "date" -> JsNumber(d)
-    ))
-    case TimestampPrimitive(y, m, d, hh, mm, ss, ms) => JsObject(Map[String,JsValue](
-      "year"  -> JsNumber(y),
-      "month" -> JsNumber(m),
-      "date"  -> JsNumber(d),
-      "hour"  -> JsNumber(hh),
-      "min"   -> JsNumber(mm),
-      "sec"   -> JsNumber(ss),
-      "msec"  -> JsNumber(ms)
-    ))
-    case x:IntervalPrimitive => JsString(x.toString)
-  }}
+  // implicit val primitiveValueWrites = new Writes[PrimitiveValue] { def writes(p:PrimitiveValue) =
+  //   AlgebraJsonCodecs.ofExpression(p)
+  // }
+  //   case _:NullPrimitive => JsNull
+  //   case x:IntPrimitive => JsNumber(x.v)
+  //   case x:FloatPrimitive => JsNumber(x.v)
+  //   case x:StringPrimitive => JsString(x.v)
+  //   case x:TypePrimitive => JsString(x.t.toString)
+  //   case x:RowIdPrimitive => JsString(x.v)
+  //   case x:BoolPrimitive => JsBoolean(x.v)
+  //   case DatePrimitive(y, m, d) => JsObject(Map[String,JsValue](
+  //     "year" -> JsNumber(y),
+  //     "month" -> JsNumber(m),
+  //     "date" -> JsNumber(d)
+  //   ))
+  //   case TimestampPrimitive(y, m, d, hh, mm, ss, ms) => JsObject(Map[String,JsValue](
+  //     "year"  -> JsNumber(y),
+  //     "month" -> JsNumber(m),
+  //     "date"  -> JsNumber(d),
+  //     "hour"  -> JsNumber(hh),
+  //     "min"   -> JsNumber(mm),
+  //     "sec"   -> JsNumber(ss),
+  //     "msec"  -> JsNumber(ms)
+  //   ))
+  //   case x:IntervalPrimitive => JsString(x.toString)
+  // }}
 
   def castJsonToPrimitive(t: Type, json: JsValue): PrimitiveValue =
   {

@@ -24,11 +24,13 @@ class LensManager(db: Database)
 
   val lensTypes = Map[ID,Lens](
     ID("TYPE_INFERENCE")    -> CastColumnsLens,
-    ID("CAST")              -> CastColumnsLens,
+    ID("GUESS_TYPES")       -> CastColumnsLens,
+    ID("DETECT_HEADERS")    -> DetectHeadersLens,
     ID("MISSING_VALUE")     -> DomainLens,
     ID("DOMAIN")            -> DomainLens,
     ID("KEY_REPAIR")        -> RepairKeyLens,
     ID("REPAIR_KEY")        -> RepairKeyLens,
+
     ID("COMMENT")           -> CommentLens,
     ID("MISSING_KEY")       -> MissingKeyLens,
     ID("PICKER")            -> MergeColumnLens,
@@ -135,27 +137,30 @@ class LensManager(db: Database)
 
   def acknowledge(lens: ID, key: Seq[PrimitiveValue])
   {
-    ???
+    logger.warn("Caveat Acknowledgements Not Implemented")
   }
 
   def acknowledgeAll(lens: ID)
   {
-    ???
+    logger.warn("Caveat Acknowledgements Not Implemented")
   }
 
   def isAcknowledged(lens: ID, key: Seq[PrimitiveValue]): Boolean =
   {
-    ???
+    logger.warn("Caveat Acknowledgements Not Implemented")
+    return false
   }
 
   def areAllAcknowledged(lens: ID): Boolean =
   {
-    ???
+    logger.warn("Caveat Acknowledgements Not Implemented")
+    return false
   }
 
   def acknowledgedKeys(lens: ID): Seq[Seq[PrimitiveValue]] = 
   {
-    ???
+    logger.warn("Caveat Acknowledgements Not Implemented")
+    return Seq()
   }
 
   def get(lens: ID): (Lens, Operator, JsValue) =

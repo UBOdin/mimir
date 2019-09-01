@@ -15,13 +15,57 @@ import mimir.Database
 import mimir.algebra._
 import mimir.lenses._
 import mimir.exec.mode.UnannotatedBestGuess
-import mimir.util.NameLookup
+import mimir.util.StringUtils
 import mimir.serialization.AlgebraJson._
+
+
+case class CastColumnsLensVote(
+  t: Type,
+  count: Long
+)
+
+object CastColumnsLensVote
+{
+  implicit val format: Format[CastColumnsLensVote] = Json.format
+  def apply(v: (Type, Long)): CastColumnsLensVote = CastColumnsLensVote(v._1, v._2)
+}
+
+case class CastColumnsLensColumnConfig(
+  chosen: Type,
+  trials: Long,
+  votes: Seq[CastColumnsLensVote]
+)
+{
+  def voteStringFor(t: Type): String = {
+    t match {
+      case TString() if votes.isEmpty => 
+        "nothing else matched"
+
+      case TString() => {
+          val bestAlternative = 
+            votes.maxBy { _.count }
+          s"Only ${bestAlternative.count} / $trials for the best alternative ${bestAlternative.t}"
+        }
+
+      case _ => 
+        votes.find { _.t.equals(t) } match {
+          case None => "no vote data"
+          case Some(v) => s"${v.count} / $trials records conforming"
+        }
+    }
+  }
+  def voteString = voteStringFor(chosen)
+}
+
+object CastColumnsLensColumnConfig
+{
+  implicit val format: Format[CastColumnsLensColumnConfig] = Json.format
+}
 
 object CastColumnsLens 
   extends MonoLens
 {
-  var sampleLimit = 1000
+  val SAMPLE_LIMIT = 1000
   
   def priority: Type => Int =
   {
@@ -51,23 +95,123 @@ object CastColumnsLens
     db: Database,
     name: ID,
     query: Operator,
-    config: JsValue
-  ): JsValue = ???
+    jsonConfig: JsValue
+  ): JsValue = 
+  {
+    val defaultConfig:Map[String,CastColumnsLensColumnConfig] = 
+      jsonConfig match {
+        case JsNull => Map()
+        case JsObject(_) => jsonConfig.as[Map[String, CastColumnsLensColumnConfig]]
+        case _ => throw new SQLException(s"Invalid initial configuration: $jsonConfig")
+      }
+
+    val schema = 
+      db.typechecker.schemaOf(query)
+
+    // Default to training only on non-specialized string columns.
+    val stringColumns = 
+      schema.filter { _._2.equals(TString()) }
+            .map { _._1 }
+            .toSet
+
+    // Ignore columns for which we are already given a configuration
+    val trainingColumns =
+      (stringColumns -- defaultConfig.keys.map { ID(_) }.toSet).toSeq
+
+    // Us a CastColumnsVoteList aggregate to extract types.
+    // Most of the post-processing afterwards is to extract the result into something
+    // more friendly.  The resulting table has one row for each training column with schema:
+    // - number of rows evaluated
+    // - votes cast: a seq
+    //     - The Type in question
+    //     - number of rows compliant with the type
+    //     - fraction of rows compliant with the type
+    val trainingResult: Seq[(Long, Seq[(Type, Long)])] = 
+      db.compiler.compileToSparkWithRewrites(
+        query.limit(SAMPLE_LIMIT, 0)
+             .projectByID(trainingColumns:_*)
+       ).agg(CastColumnsVoteList.toColumn)
+        .head()
+        .asInstanceOf[Row]
+        .toSeq(0)
+        .asInstanceOf[Seq[Row]]
+        .map { colCounts => 
+          (
+            colCounts.getLong(0), // the total number of rows tested
+            colCounts.getSeq[Row](1) // votes per type
+                     .map { votes => 
+                        (
+                          Type.fromIndex(votes.getInt(0)),  // the type index
+                          votes.getLong(1)                  // the number of votes for this type
+                        )
+                     }
+          )
+        }
+        .toSeq
+
+    val newConfigEntries: Map[String, CastColumnsLensColumnConfig] = 
+      trainingColumns.zip(trainingResult)
+        .map { case (columnId, (numberOfRowsTested, rawVotes)) => 
+          // include 50% votes for String
+          val votes = rawVotes :+ (TString(), numberOfRowsTested/2)
+
+          // Rank votes by the number of votes, settling differences with the 
+          // priority function given above.
+          val bestType = 
+            votes.maxBy { v => (v._2, priority(v._1)) }
+                 ._1 // keep only the selected type
+
+          columnId.id -> CastColumnsLensColumnConfig(
+            bestType, 
+            numberOfRowsTested,
+            votes.map { CastColumnsLensVote(_) }
+          )
+        }
+        .toMap
+
+    Json.toJson(newConfigEntries)
+  }
 
   def view(
     db: Database,
     name: ID,
     query: Operator,
-    config: JsValue,
+    jsonConfig: JsValue,
     friendlyName: String
-  ): Operator = ???
+  ): Operator = 
+  {
+    val config = jsonConfig.as[Map[String, CastColumnsLensColumnConfig]]
+
+    query.alterColumns(
+            config.map { case (col, colConfig) =>
+              val cast = CastExpression(Var(col), colConfig.chosen)
+              val message = 
+                Function(ID("concat"), Seq(
+                  StringPrimitive("Couldn't cast '"),
+                  CastExpression(Var(col), TString()),
+                  StringPrimitive(s"' as ${StringUtils.withDefiniteArticle(colConfig.chosen.toString)} in $friendlyName.$col (${colConfig.voteString})")
+                ))
+              val assembledCaveat =
+                Caveat(name, NullPrimitive(), Seq(Var(col)), message)
+              col -> 
+                Var(col)
+                  .isNull
+                  .thenElse { NullPrimitive() }
+                            { cast.isNull 
+                                  .thenElse { assembledCaveat }
+                                            { cast }
+                            }
+
+            }.toSeq:_*
+    )
+  }
 
 }
 
 
 
 object CastColumnsVoteList
-    extends Aggregator[Row,  Seq[(Long,Seq[(Int,Long)])], Seq[(Long,Seq[(Type,Double)])]] with Serializable 
+    extends Aggregator[Row,  Seq[(Long,Seq[(Int,Long)])], Seq[(Long,Seq[(Int,Long)])]] with Serializable 
 {
   def zero = Seq[(Long,Seq[(Int, Long)])]()
   def reduce(acc: Seq[(Long, Seq[(Int, Long)])], x: Row) = {
@@ -118,15 +262,15 @@ object CastColumnsVoteList
         totalCount, 
         countByType.groupBy { _._1 }
                    .map { case (typeIndex, counts) => 
-                      Type.fromIndex(typeIndex) ->
-                        counts.map { _._2 }.sum.toDouble / totalCount
+                      typeIndex ->
+                        counts.map { _._2 }.sum
                    }
                    .toSeq
                    .sortBy { -_._2 }
       )
     }
   def bufferEncoder: Encoder[Seq[(Long, Seq[(Int, Long)])]] = ExpressionEncoder()
-  def outputEncoder: Encoder[Seq[(Long, Seq[(Type,Double)])]] = ExpressionEncoder()
+  def outputEncoder: Encoder[Seq[(Long, Seq[(Int, Long)])]] = ExpressionEncoder()
 }
 
 // package mimir.adaptive

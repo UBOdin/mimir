@@ -361,7 +361,7 @@ case class Database(
           case Some(id) => lenses.drop(id)
         }
       case DropLens(name, ifExists)               => 
-        views.resolveTableByName(name) match {
+        lenses.resolveTableByName(name) match {
           case None if ifExists => {}
           case None => throw new SQLException(s"No such view $name")
           case Some(id) => lenses.drop(id)

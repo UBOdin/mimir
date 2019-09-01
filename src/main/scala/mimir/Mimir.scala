@@ -178,6 +178,10 @@ object Mimir extends LazyLogging {
           output.print("Error: "+e.getMessage)
           logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
 
+        case e: org.apache.spark.sql.AnalysisException =>
+          output.print("Error: "+e.getMessage)
+          logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
+
         case e: Throwable => {
           output.print("An unknown error occurred...");
           e.printStackTrace()

@@ -1,5 +1,6 @@
 package mimir.parser
 
+import play.api.libs.json.JsNull
 import fastparse._, MultiLineWhitespace._
 import sparsity.parser.{
   SQL,
@@ -148,7 +149,9 @@ object MimirSQL
       SQL.select ~
       MimirKeyword("WITH") ~/
       Sparsity.identifier ~
-      "(" ~ JsonParser.jsonExpr ~ ")"
+      (
+        "(" ~ JsonParser.jsonExpr ~ ")"
+      ).?.map { _.getOrElse { JsNull } }
     ).map { case (name, query, lensType, args) => 
       CreateLens(name, query, lensType, args)
     }
