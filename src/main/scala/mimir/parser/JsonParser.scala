@@ -26,7 +26,8 @@ import play.api.libs.json._
 
 object JsonParser {
 
-  def stringChars(c: Char) = c != '\"' && c != '\\'
+  def doubleQuotedStringChars(c: Char) = c != '\"' && c != '\\'
+  def singleQuotedStringChars(c: Char) = c != '\'' && c != '\\'
 
   def space[_: P]         = P( CharsWhileIn(" \r\n", 0) )
   def digits[_: P]        = P( CharsWhileIn("0-9") )
@@ -48,11 +49,12 @@ object JsonParser {
   def unicodeEscape[_: P] = P( "u" ~ hexDigit ~ hexDigit ~ hexDigit ~ hexDigit )
   def escape[_: P]        = P( "\\" ~ (CharIn("\"/\\\\bfnrt") | unicodeEscape) )
 
-  def strChars[_: P] = P( CharsWhile(stringChars) )
+  def doubleStrChars[_: P] = P( CharsWhile(doubleQuotedStringChars) )
+  def singleStrChars[_: P] = P( CharsWhile(singleQuotedStringChars) )
   def string[_: P] =
     P( 
-        (space ~ "\"" ~/ (strChars | escape).rep.! ~ "\"")
-      | (space ~ "'" ~/ (strChars | escape).rep.! ~ "'")
+        (space ~ "\"" ~/ (doubleStrChars | escape).rep.! ~ "\"")
+      | (space ~ "'" ~/ (singleStrChars | escape).rep.! ~ "'")
     ).map { JsString } 
 
   def array[_: P] =

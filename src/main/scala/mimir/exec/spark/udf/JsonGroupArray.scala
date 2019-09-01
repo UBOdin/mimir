@@ -29,7 +29,13 @@ case class JsonGroupArray(child: org.apache.spark.sql.catalyst.expressions.Expre
   override lazy val updateExpressions: Seq[ org.apache.spark.sql.catalyst.expressions.Expression] = Seq(
     If(IsNull(child),
       Concat(Seq(json_group_array, Literal(","), Literal("null"))),
-      Concat(Seq(json_group_array, Literal(","), org.apache.spark.sql.catalyst.expressions.Cast(child,StringType,None)))) 
+      Concat(Seq(
+        json_group_array, 
+        Literal(","), 
+        Literal("\""), 
+        org.apache.spark.sql.catalyst.expressions.Cast(child,StringType,None),
+        Literal("\"")
+      ))) 
   )
   override lazy val mergeExpressions: Seq[org.apache.spark.sql.catalyst.expressions.Expression] = {
     Seq(
