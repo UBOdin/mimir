@@ -541,10 +541,7 @@ object AlgebraJson {
   )( TimestampPrimitive.apply _ ) or 
     JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[TimestampPrimitive] }
   implicit val primitiveValueReads : Reads[PrimitiveValue] = (
-    JsPath.read[FloatPrimitive].map { _.asInstanceOf[PrimitiveValue] } or 
-    JsPath.read[Boolean].map { BoolPrimitive(_).asInstanceOf[PrimitiveValue] } or 
-    JsPath.read[TimestampPrimitive].map { _.asInstanceOf[PrimitiveValue] } or
-    JsPath.read[StringPrimitive].map { _.asInstanceOf[PrimitiveValue] }
+    JsPath.read[JsObject].map { AlgebraJsonCodecs.toExpression(_).asInstanceOf[PrimitiveValue] }
   )
 
   // implicit val primitiveValueWrites = new Writes[PrimitiveValue] { def writes(p:PrimitiveValue) =

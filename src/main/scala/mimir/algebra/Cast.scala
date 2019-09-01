@@ -8,7 +8,11 @@ object Cast
   {
     try {
       t match {
-        case TInt()             => IntPrimitive(x.asLong)
+        case TInt()             => 
+          x match { 
+            case FloatPrimitive(f) => IntPrimitive(f.toLong)
+            case _ => IntPrimitive(x.asLong)
+          }
         case TFloat()           => FloatPrimitive(x.asDouble)
         case TString()          => StringPrimitive(x.asString)
         case TDate()            => 

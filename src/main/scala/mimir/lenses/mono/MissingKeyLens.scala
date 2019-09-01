@@ -3,6 +3,7 @@ package mimir.lenses.mono
 import java.sql.SQLException
 import play.api.libs.json._
 import sparsity.Name
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.algebra._
 import mimir.Database
@@ -23,7 +24,9 @@ object MissingKeyLensConfig
   implicit val format:Format[MissingKeyLensConfig] = Json.format
 }
 
-object MissingKeyLens extends MonoLens
+object MissingKeyLens 
+  extends MonoLens
+  with LazyLogging
 {
   def train(
     db: Database,
@@ -41,12 +44,16 @@ object MissingKeyLens extends MonoLens
               if(    (elems contains "low")
                   && (elems contains "high")
                   && (elems contains "step") ){
+                val keyType = db.typechecker.typeOf(Var(key), query)
+                val stepType = Typechecker.escalate(keyType, keyType, Arith.Sub).get
+                logger.debug(s"Building config for $key with type $keyType and step $stepType")
+                logger.debug(s"... low = ${elems.get("low")}; high = ${elems.get("high")}; step = ${elems.get("step")}")
                 MissingKeyLensConfig(
                   ID(key),
-                  db.typechecker.typeOf(Var(key), query),
-                  elems.get("low").get.as[PrimitiveValue],
-                  elems.get("high").get.as[PrimitiveValue],
-                  elems.get("step").get.as[PrimitiveValue]
+                  keyType,
+                  Cast(keyType, elems.get("low").get.as[PrimitiveValue]),
+                  Cast(keyType, elems.get("high").get.as[PrimitiveValue]),
+                  Cast(stepType, elems.get("step").get.as[PrimitiveValue])
                 )
               } else { trainOnKey(db, query, ID(key)) }
             case _ => throw new SQLException(s"Invalid configuration $configJson")
@@ -103,7 +110,12 @@ object MissingKeyLens extends MonoLens
     friendlyName: String
   ): Operator = 
   {
+    logger.debug(s"Creating view: $configJson")
+
     val config = configJson.as[MissingKeyLensConfig]
+
+    logger.debug(s"Creating view: $config")
+
     val series = 
       HardTable(
         Seq(ID("_MIMIR_MISSING_KEY") -> config.t),
@@ -115,15 +127,19 @@ object MissingKeyLens extends MonoLens
       query.filter { Not(Var(config.key).isNull) },
       Var("_MIMIR_MISSING_KEY").eq( Var(config.key) )
     ).filter { 
-        Caveat(
-          name,
-          BoolPrimitive(true),
-          Seq(Var("_MIMIR_MISSING_KEY")),
-          Function(ID("concat"),Seq(
-            StringPrimitive("Injected missing key: "),
-            Var("_MIMIR_MISSING_KEY").as(TString())
-          ))
-        )
+        Var(config.key)
+          .isNull
+          .thenElse {
+            Caveat(
+              name,
+              BoolPrimitive(true),
+              Seq(Var("_MIMIR_MISSING_KEY")),
+              Function(ID("concat"),Seq(
+                StringPrimitive("Injected missing key: "),
+                Var("_MIMIR_MISSING_KEY").as(TString())
+              ))
+            )
+          } { BoolPrimitive(true) }
       }
      .removeColumnsByID(config.key)
      .renameByID(ID("_MIMIR_MISSING_KEY") -> config.key)
