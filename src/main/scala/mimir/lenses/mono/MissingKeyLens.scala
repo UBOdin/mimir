@@ -37,6 +37,7 @@ object MissingKeyLens
   {
     Json.toJson(
       configJson match {
+        case JsNull => discoverKey(db, query)
         case JsObject(elems) => 
           elems.get("key") match {
             case None | Some(JsNull) => discoverKey(db, query)
@@ -74,8 +75,10 @@ object MissingKeyLens
   {
     val candidates = DetectSeries.seriesOf(db, query)
     if(candidates.isEmpty) { throw new SQLException("No valid key column") }
+    val best = candidates.minBy { _.relativeStepStddev }
     makeConfig(
-      candidates.minBy { _.relativeStepStddev }
+      best,
+      db.typechecker.typeOf(Var(best.name), query)
     )
   }
 
@@ -86,18 +89,23 @@ object MissingKeyLens
   ): MissingKeyLensConfig = 
   {
     makeConfig(
-      DetectSeries.gatherStatistics(db, query, key)
+      DetectSeries.gatherStatistics(db, query, key), 
+      db.typechecker.typeOf(Var(key), query)
     )
   }
 
-  def makeConfig(stats: ColumnStepStatistics): MissingKeyLensConfig =
+  def makeConfig(stats: ColumnStepStatistics, t: Type): MissingKeyLensConfig =
   {
+    val step = 
+      if(stats.minStep.asDouble > 0) { stats.minStep }
+      else { stats.meanStep }
+
     MissingKeyLensConfig(
       stats.name,
       stats.t,
-      stats.meanStep,
       stats.low,
-      stats.high
+      stats.high,
+      Cast(t, step)
     )
 
   }

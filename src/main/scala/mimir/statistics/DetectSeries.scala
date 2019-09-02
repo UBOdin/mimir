@@ -31,6 +31,7 @@ case class ColumnStepStatistics(
   name: ID,
   t: Type,
   meanStep: PrimitiveValue,
+  minStep: PrimitiveValue,
   relativeStepStddev: Double,
   low: PrimitiveValue,
   high: PrimitiveValue
@@ -48,9 +49,7 @@ object DetectSeries
 { 
   def VALID_SEQUENCE_TYPES = Set[Type](
     TInt(),
-    TFloat(),
-    TDate(),
-    TTimestamp()
+    TFloat()
   )
 
   def seriesOf(
@@ -105,44 +104,37 @@ object DetectSeries
              .agg(
                 mean("diff").alias("step_mean"),
                 stddev("diff").alias("step_stddev"),
+                min("diff").alias("step_min"),
                 min("prev").alias("low"),
                 max("curr").alias("high")
               )
              .withColumn("step_relstddev", col("step_stddev") / col("step_mean"))
              .head
 
-    val getDelta: (String => PrimitiveValue) =
-      t match {
-        case TInt() => 
-          { (v:String) => IntPrimitive(results.getAs[Long](v)) }
-        case TFloat() => 
-          { (v:String) => FloatPrimitive(results.getAs[Long](v)) }
-        case TDate() | TTimestamp() => 
-          { (v:String) => IntervalPrimitive(results.getAs[Period](v)) }
-        case _ => 
-          throw new SQLException(s"Unsupported sequence column type $t")
-      }
-    val getValue: (String => PrimitiveValue) =
-      t match {
-        case TInt() => 
-          { (v:String) => IntPrimitive(results.getAs[Long](v)) }
-        case TFloat() => 
-          { (v:String) => FloatPrimitive(results.getAs[Long](v)) }
-        case TDate() => 
-          { (v:String) => SparkUtils.convertDate(results.getAs[Date](v)) }
-        case TTimestamp() => 
-          { (v:String) => SparkUtils.convertTimestamp(results.getAs[Timestamp](v)) }
-        case _ => 
-          throw new SQLException(s"Unsupported sequence column type $t")
+    val get: (String => PrimitiveValue) =
+      v => (v, t) match {
+        case (("low" | "high"), TInt()) => 
+          IntPrimitive(results.getAs[Long](v))
+        case (("low" | "high"), TFloat()) => 
+          FloatPrimitive(results.getAs[Double](v))
+        case (("step_relstddev" | "step_mean"), _) =>
+          FloatPrimitive(results.getAs[Double](v))
+        case ("step_min", TInt()) =>
+          FloatPrimitive(results.getAs[Long](v))
+        case ("step_min", TFloat()) =>
+          FloatPrimitive(results.getAs[Double](v))
+        case _ =>
+          throw new SQLException(s"Unsupported sequence column type $t ($v)")
       }
 
     ColumnStepStatistics(
       column,
       t,
-      getDelta("step_mean"),
+      get("step_mean"),
+      get("step_min"),
       results.getAs[Double]("step_relstddev"),
-      getValue("low"),
-      getValue("high")
+      get("low"),
+      get("high")
     )
   }
 
