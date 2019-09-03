@@ -80,7 +80,7 @@ object MimirVizier extends LazyLogging {
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)
     val metadata = new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname())
-    val staging = if(conf.dataStagingType().equalsIgnoreCase("hdfs"))
+    val staging = if(conf.dataStagingType().equalsIgnoreCase("hdfs") && ExperimentalOptions.isEnabled("remoteSpark"))
       new HDFSRawFileProvider()
     else 
       new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))

@@ -1,3 +1,4 @@
+
 package mimir.exec.spark.datasource.csv
 
 import org.apache.spark.util.SerializableConfiguration
@@ -27,6 +28,11 @@ import com.univocity.parsers.csv.CsvParser
 import java.io.Reader
 import java.io.InputStreamReader
 import java.io.FileReader
+//import scala.util.parsing.input.Reader
+import scala.util.parsing.input.Position
+import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
+import mimir.util.StringUtils
+import org.apache.spark.rdd.RDD
 
 class DefaultSource extends DataSourceV2 with ReadSupport {
 
@@ -36,52 +42,100 @@ class DefaultSource extends DataSourceV2 with ReadSupport {
   }
 }
 
+
 class CSVDataSourceReader(path: String, options: Map[String,String]) extends DataSourceReader {
 
-  def readSchema() = {
-    val sparkContext = SparkSession.builder.getOrCreate().sparkContext
-    val firstLine = sparkContext.textFile(path).first()
-    val columnNames = firstLine.split(",")
-    val structFields = columnNames.map(value ⇒ StructField(value, StringType))
+  var colCount = 0
+  var rdd:RDD[String] = null
+  
+  def getColCount():Int = {
+    if(colCount == 0){
+      val sparkContext = SparkSession.builder.getOrCreate().sparkContext
+      rdd = sparkContext.textFile(path)
+      val top = rdd.take(10)
+      if(top.isEmpty)
+        throw new Exception("Error: the csv datasource is empty.")
+      val delimeter = options.getOrElse("delimeter", ",")
+      colCount = top.foldLeft(Map(1 ->1)) {
+        case (init, curr) => {
+           val currCount = StringUtils.countSubstring(curr, delimeter) + 1
+           if(currCount > 0)
+             init.updated(currCount, init.getOrElse(currCount, 0) + 1)
+           else init
+        }
+      }.maxBy(_._2)._1
+      colCount
+    }
+    else
+      colCount
+  }
+  
+  def readSchema() : StructType = {
+    val structFields = (1 to getColCount()).map(value ⇒ StructField(s"_c$value", StringType))
     StructType(structFields)
   }
 
   def planInputPartitions: JList[InputPartition[InternalRow]] = {
-    val sparkContext = SparkSession.builder.getOrCreate().sparkContext
-    val rdd = sparkContext.textFile(path)
+    val colCount = getColCount()
     List[InputPartition[InternalRow]](
     (0 to rdd.getNumPartitions - 1).map(value =>
-      new CSVDataSourceReaderFactory(value, path, options)):_*).asJava
+      new CSVDataSourceReaderFactory(value, path, options, colCount)):_*).asJava
   }
 
 }
 
 
-class CSVDataSourceReaderFactory(partitionNumber: Int, filePath: String, options: Map[String,String], hasHeader: Boolean = true) 
+
+class CSVDataSourceReaderFactory(partitionNumber: Int, filePath: String, options: Map[String,String], val colCount:Int, hasHeader: Boolean = true) 
 extends InputPartition[InternalRow] 
 with InputPartitionReader[InternalRow] {
 
-  def createPartitionReader:InputPartitionReader[InternalRow] = new CSVDataSourceReaderFactory(partitionNumber, filePath, options, hasHeader)
+  def createPartitionReader:InputPartitionReader[InternalRow] = new CSVDataSourceReaderFactory(partitionNumber, filePath, options, colCount, hasHeader)
 
   var row: Array[String] = null
   var parser: CsvParser = null
+  var iterator: Iterator[String] = null
+  val parsedOptions = new CSVOptions(
+      options,
+      SparkSession.builder.getOrCreate().sessionState.conf.csvColumnPruning,
+      SparkSession.builder.getOrCreate().sessionState.conf.sessionLocalTimeZone,
+      SparkSession.builder.getOrCreate().sessionState.conf.columnNameOfCorruptRecord)
   
   @transient
   def next = {
-    if (parser == null) {
+    if (iterator == null) {
       val sparkContext = SparkSession.builder.getOrCreate().sparkContext
       val out = new StringBuilder()
-      val settings = new CsvParserSettings()
-      settings.getFormat.setLineSeparator("\n")
+      val settings = parsedOptions.asParserSettings
+      val delimeter = options.getOrElse("delimeter", ",").charAt(0)
+      settings.getFormat.setDelimiter(delimeter)
+      settings.setHeaderExtractionEnabled(false)
       parser = new CsvParser(settings)
-      parser.beginParsing(new FileReader(filePath))
+      val rdd = sparkContext.textFile(filePath)
+      val partition = rdd.partitions(partitionNumber)
+      iterator = rdd.iterator(partition, org.apache.spark.TaskContext.get())
     }
-    row = parser.parseNext()
-    row != null
+    if(iterator.hasNext){
+      try{
+        val rowStr = iterator.next()
+        //parser.beginParsing(new ByteArrayInputStream(rowStr.getBytes("UTF-8")))
+        row = parser.parseLine(rowStr)//parseNext()
+        //parser.stopParsing()
+      } catch {
+        case t:Throwable => {
+          row = ((1 to colCount).map(el => "")).toArray
+        }
+      }
+      true
+    }
+    else false
   }
 
   def get = {
-    InternalRow.fromSeq(row.toSeq.map(rte => UTF8String.fromString(rte)))
+    val cols = (1 to colCount)
+    val fullRow = cols.zipAll(row,-1,"")
+    InternalRow.fromSeq(fullRow.map(rte => {
+      UTF8String.fromString(rte._2)}))
   }
   def close() = parser.stopParsing()
 }

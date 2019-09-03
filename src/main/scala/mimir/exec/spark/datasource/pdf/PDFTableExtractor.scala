@@ -16,12 +16,18 @@ class PDFTableExtractor {
     stringBuilder.toString
   }
   
-  def defaultExtract(pdfFile:String, pages:String="all", outFile:Option[String]=None, hasGridLines:Boolean=false) = {
+  def defaultExtract(pdfFile:String, pages:String="all", area:Option[String]=None, outFile:Option[String]=None, hasGridLines:Boolean=false, guessArea:Boolean=true) = {
     csvFromCommandLineArgs(Array[String](
                 pdfFile,
                 "-p", pages) 
+                ++ (if(guessArea) Array("-g") 
+                    else Array[String]()) 
                 ++ (if(hasGridLines) Array[String]() 
                     else Array("-n")) 
+                ++ (area match { 
+                      case None => Array[String]() 
+                      case Some(areaStr) => Array("-a", areaStr.split(";").mkString(","))
+                    })
                 ++ Array[String]( "-f",
                 "CSV", "-o", (outFile match {
                   case Some(outName) => outName
