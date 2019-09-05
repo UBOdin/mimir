@@ -33,6 +33,11 @@ import scala.util.parsing.input.Position
 import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
 import mimir.util.StringUtils
 import org.apache.spark.rdd.RDD
+import com.univocity.parsers.common.processor.RowListProcessor
+import com.univocity.parsers.common.RetryableErrorHandler
+import com.univocity.parsers.common.ParsingContext
+import com.univocity.parsers.common.DataProcessingException
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 class DefaultSource extends DataSourceV2 with ReadSupport {
 
@@ -43,7 +48,9 @@ class DefaultSource extends DataSourceV2 with ReadSupport {
 }
 
 
-class CSVDataSourceReader(path: String, options: Map[String,String]) extends DataSourceReader {
+class CSVDataSourceReader(path: String, options: Map[String,String]) 
+extends DataSourceReader 
+with LazyLogging {
 
   var colCount = 0
   var rdd:RDD[String] = null
@@ -52,13 +59,14 @@ class CSVDataSourceReader(path: String, options: Map[String,String]) extends Dat
     if(colCount == 0){
       val sparkContext = SparkSession.builder.getOrCreate().sparkContext
       rdd = sparkContext.textFile(path)
-      val top = rdd.take(10)
+      val top = rdd.takeSample(true, 10, 0)
+      //logger.debug(s"----------------------------------------------------\nsample: ${top.mkString("\n")}\n------------------------------------------------------------------------")
       if(top.isEmpty)
         throw new Exception("Error: the csv datasource is empty.")
       val delimeter = options.getOrElse("delimeter", ",")
       colCount = top.foldLeft(Map(1 ->1)) {
         case (init, curr) => {
-           val currCount = StringUtils.countSubstring(curr, delimeter) + 1
+           val currCount = curr.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)").length//StringUtils.countSubstring(curr, delimeter) + 1
            if(currCount > 0)
              init.updated(currCount, init.getOrElse(currCount, 0) + 1)
            else init
@@ -84,15 +92,38 @@ class CSVDataSourceReader(path: String, options: Map[String,String]) extends Dat
 
 }
 
-
+class CSVParserErrorHandler 
+extends RetryableErrorHandler[ParsingContext] {
+  override def handleError(error: DataProcessingException,
+                           inputRow: Array[AnyRef],
+                           context: ParsingContext): Unit = {
+    //logger.error("Error processing row: " + inputRow.mkString("[,]"))
+    /*logger.error(
+      "Error details: column '" + error.getColumnName + "' (index " +
+        error.getColumnIndex +
+        ") has value '" +
+        inputRow(error.getColumnIndex) +
+        "'. Setting it to null"
+    )*/
+    if (error.getColumnIndex == 0) {
+      this.setDefaultValue(null)
+    } else {
+      //prevents the parser from discarding the row.
+      keepRecord()
+    }
+  }
+}
 
 class CSVDataSourceReaderFactory(partitionNumber: Int, filePath: String, options: Map[String,String], val colCount:Int, hasHeader: Boolean = true) 
 extends InputPartition[InternalRow] 
-with InputPartitionReader[InternalRow] {
-
+with InputPartitionReader[InternalRow] 
+{
+  
   def createPartitionReader:InputPartitionReader[InternalRow] = new CSVDataSourceReaderFactory(partitionNumber, filePath, options, colCount, hasHeader)
 
+  //logger.debug(s"CSVDataSourceReaderFactory($partitionNumber, $filePath, $options, $colCount, $hasHeader)")
   var row: Array[String] = null
+  var rowProcessor:RowListProcessor = null
   var parser: CsvParser = null
   var iterator: Iterator[String] = null
   val parsedOptions = new CSVOptions(
@@ -110,6 +141,10 @@ with InputPartitionReader[InternalRow] {
       val delimeter = options.getOrElse("delimeter", ",").charAt(0)
       settings.getFormat.setDelimiter(delimeter)
       settings.setHeaderExtractionEnabled(false)
+      rowProcessor = new RowListProcessor();
+      settings.setProcessor(rowProcessor);
+      
+      settings.setProcessorErrorHandler(new CSVParserErrorHandler())
       parser = new CsvParser(settings)
       val rdd = sparkContext.textFile(filePath)
       val partition = rdd.partitions(partitionNumber)
