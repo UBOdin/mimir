@@ -149,7 +149,7 @@ class SimplePickerModel(override val name: ID, resultColumn:ID, pickFromCols:Seq
         val arg1 = args(1)
         val arg2 = args(2)
         useClassifier match { //use result of case expression
-          case None if hints.isEmpty => arg1
+          case None if hints.isEmpty => pickFromArgs(args)
           case None => hints(0)
           case Some(sparkModelType) =>
             getCache(idx, args, hints) match {

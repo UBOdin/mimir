@@ -69,12 +69,13 @@ case class UnloadRequest (
                   backendOption: Seq[Tuple]
 ) extends Request {
   def handle(os:OutputStream) = {
-    MimirVizier.unloadDataSource(
-      input, 
-      file, 
-      format, 
-      backendOption.map(tup => tup.name -> tup.value)
-    )
+    os.write(Json.stringify(Json.toJson(
+        UnloadResponse(MimirVizier.unloadDataSource(
+          input, 
+          file, 
+          format, 
+          backendOption.map(tup => tup.name -> tup.value))
+        ))).getBytes )
   }
 }
 

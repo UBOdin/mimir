@@ -59,14 +59,14 @@ with LazyLogging {
     if(colCount == 0){
       val sparkContext = SparkSession.builder.getOrCreate().sparkContext
       rdd = sparkContext.textFile(path)
-      val top = rdd.takeSample(true, 10, 0)
+      val top = rdd.takeSample(true, 30, 0)
       //logger.debug(s"----------------------------------------------------\nsample: ${top.mkString("\n")}\n------------------------------------------------------------------------")
       if(top.isEmpty)
         throw new Exception("Error: the csv datasource is empty.")
       val delimeter = options.getOrElse("delimeter", ",")
       colCount = top.foldLeft(Map(1 ->1)) {
         case (init, curr) => {
-           val currCount = curr.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)").length//StringUtils.countSubstring(curr, delimeter) + 1
+           val currCount = curr.split(delimeter+"(?=([^\"]*\"[^\"]*\")*[^\"]*$)").length//StringUtils.countSubstring(curr, delimeter) + 1
            if(currCount > 0)
              init.updated(currCount, init.getOrElse(currCount, 0) + 1)
            else init

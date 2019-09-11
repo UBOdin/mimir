@@ -47,6 +47,15 @@ object LoadResponse {
 }
 
 
+case class UnloadResponse (
+            /* name of resulting table */
+                  outputFiles: Seq[String]
+) extends Response
+
+object UnloadResponse {
+  implicit val format: Format[UnloadResponse] = Json.format
+}
+
 case class CreateLensResponse (
             /* name of resulting lens */
                   lensName: String,

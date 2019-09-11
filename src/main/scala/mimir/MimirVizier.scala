@@ -308,7 +308,7 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def unloadDataSource(input:String, file : String, format:String, backendOptions:Seq[Any]) : Unit = {
+  def unloadDataSource(input:String, file : String, format:String, backendOptions:Seq[Any]) : List[String] = {
     try{
       val timeRes = logTime("loadDataSource") {
         logger.debug("unloadDataSource: From Vistrails: [" + input + "] [" + file + "] [" + format + "] [ " + backendOptions.mkString(",") + " ]"  ) ;
@@ -330,8 +330,15 @@ object MimirVizier extends LazyLogging {
             bkOpts.toMap, 
             if(file == null || file.isEmpty()) None else Some(file)
           )
+          if(!(file == null || file.isEmpty())){
+            val filedir = new File(file)
+            filedir.listFiles.filter(_.isFile)
+              .map(_.getName).toList
+          }
+          else List[String]()
       }
       logger.debug(s"unloadDataSource Took: ${timeRes._2}")
+      timeRes._1
     } catch {
       case t: Throwable => {
         logger.error(s"Error Unloading Data: $file", t)

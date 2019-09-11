@@ -22,8 +22,8 @@ class PDFTableExtractor {
                 "-p", pages) 
                 ++ (if(guessArea) Array("-g") 
                     else Array[String]()) 
-                ++ (if(hasGridLines) Array[String]() 
-                    else Array("-n")) 
+                ++ (if(hasGridLines) Array("-l") 
+                    else Array("-t")) 
                 ++ (area match { 
                       case None => Array[String]() 
                       case Some(areaStr) => Array("-a", areaStr.split(";").mkString(","))
