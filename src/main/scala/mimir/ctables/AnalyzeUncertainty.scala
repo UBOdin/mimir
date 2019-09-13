@@ -21,21 +21,6 @@ case class InvalidProvenance(msg: String, token: RowIdPrimitive)
 
 class AnalyzeUncertainty(db: Database) extends LazyLogging {
 
-	// def getFocusedReasons(reasonSets: Seq[ReasonSet]): Seq[Reason] =
-	// {
-	// 	reasonSets.flatMap { reasonSet => 
-	// 		logger.trace(s"Trying to Expand: $reasonSet")
-	// 		val subReasons = reasonSet.take(db, 4).toSeq
-	// 		if(subReasons.size > 3){
-	// 			logger.trace("   -> Too many explanations to fit in one group")
-	// 			Seq(new MultiReason(db, reasonSet))
-	// 		} else {
-	// 			logger.trace(s"   -> Only ${subReasons.size} explanations")
-	// 			subReasons
-	// 		}
-	// 	}
-	// }
-
 	def filterByProvenance(rawOper: Operator, token: RowIdPrimitive): Operator =
 	{
 		val oper = new PropagateEmptyViews(db.typechecker, db.aggregates)(rawOper)
@@ -255,48 +240,9 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 				logger.debug(s"Explain Adaptive View Source 1: Recursion into $tableNameString")
 				val sourceReasons = recur(query)
 					
-				val (tableReasons, attrReasons) = if(wantSchema){
-  				// Model details
-  				val schemaProvider: SchemaProvider = 
-  					schema match {
-  						case None => db.lenses
-  						case Some(lens) => db.lenses.schemaProviderFor(lens).get
-  					}
-  
-  				// Source 2: There might be uncertainty on the table.  Use SYS_TABLES to dig these annotations up.
-  				logger.debug(s"Explain Adaptive View Source 2: $tableNameString itself")
-  				val tableReasons = explainSubsetWithoutOptimizing(
-  					schemaProvider.listTablesQuery
-  												.filter { Var(ID("TABLE_NAME")).eq(StringPrimitive(table.id)) }, 
-  					wantCol = SystemCatalog.tableCatalogSchema.map { _._1 }.toSet,
-  					wantRow = true, 
-  					wantSort = false, 
-  					wantSchema = false,
-  					adaptiveSchemaOnlyCols = Set()
-  				)
-  				// alternative: Use SYS_TABLES directly
-  				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ) )
-  
-  				// Source 3: Check for uncertainty in one of the attributes of interest
-  				logger.debug(s"Explain Adaptive View Source 3: $tableNameString's attributes")
-  				val attrReasons = recur(
-  					schemaProvider.listAttributesQuery
-                          .filter { Var(ID("TABLE_NAME")).eq(StringPrimitive(table.id))
-                                      .and { Var(ID("ATTR_NAME")).in( 
-                                                (wantCol++adaptiveSchemaOnlyCols)
-                                                       .toSeq
-                                                       .map { _.id }
-                                                       .map { StringPrimitive(_) } 
-                                             ) }
-                                    },
-  					wantCol = SystemCatalog.attrCatalogSchema.map { _._1 }.toSet, 
-  					wantRow = true, 
-  					wantSort = true, 
-  					wantSchema = false,
-  					adaptiveSchemaOnlyCols = Set()
-  				)
-  				(tableReasons, attrReasons)
-				} else (Seq(), Seq())
+				val (lensReasons) = if(wantSchema){
+					db.lenses.warningsFor(schema, table, wantCols)
+				} else (Seq())
 				logger.debug(s"Explain Adaptive View Done: $tableNameString")
 				// alternative: Use SYS_ATTRS directly
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ).and( Var("ATTR").in(wantCol.map(StringPrimitive(_))) ) )

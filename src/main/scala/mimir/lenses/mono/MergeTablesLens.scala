@@ -2,8 +2,9 @@ package mimir.lens.mono
 
 import play.api.libs.json._
 
-import mimir.algebra._
 import mimir.Database
+import mimir.algebra._
+import mimir.ctables.Reason
 import mimir.lenses._
 
 object MergeTablesLens extends MonoLens
@@ -22,6 +23,15 @@ object MergeTablesLens extends MonoLens
     config: JsValue,
     friendlyName: String
   ): Operator = ???
+
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    configJson: JsValue, 
+    friendlyName: String
+  ) = Seq[Reason]()
 }
 
 

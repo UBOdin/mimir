@@ -4,8 +4,9 @@ import java.sql.SQLException
 import play.api.libs.json._
 import sparsity.Name
 
-import mimir.algebra._
 import mimir.Database
+import mimir.algebra._
+import mimir.ctables.Reason
 import mimir.lenses._
 
 case class MergeColumnLensConfig(
@@ -82,6 +83,15 @@ object MergeColumnLens extends MonoLens
       )
     ):_* )
   }
+
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    configJson: JsValue, 
+    friendlyName: String
+  ) = Seq[Reason]()
 }
 
 // package mimir.lenses

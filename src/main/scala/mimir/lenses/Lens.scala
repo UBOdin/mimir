@@ -3,7 +3,7 @@ package mimir.lenses
 import play.api.libs.json._
 import mimir.Database
 import mimir.algebra._
-
+import mimir.ctables.Reason
 
 /**
  * An interface for Lens implementations
@@ -62,6 +62,24 @@ trait MonoLens extends Lens
     config: JsValue, 
     friendlyName: String
   ): Operator
+
+  /**
+   * Generate the operator implementation of this lens
+   * 
+   * @param db           The global database instance
+   * @param name         The identity of the specified lens
+   * @param query        The query for the input to this lens
+   * @param config       The user-provided configuration for this lens
+   * @param friendlyName The human-readable name for this lens
+   */
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    config: JsValue, 
+    friendlyName: String
+  ): Seq[Reason]
 
   /**
    * Generate the schema for this lens

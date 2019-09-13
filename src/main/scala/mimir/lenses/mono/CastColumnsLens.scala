@@ -13,8 +13,9 @@ import sparsity.Name
 
 import mimir.Database
 import mimir.algebra._
-import mimir.lenses._
+import mimir.ctables.Reason
 import mimir.exec.mode.UnannotatedBestGuess
+import mimir.lenses._
 import mimir.util.StringUtils
 import mimir.serialization.AlgebraJson._
 
@@ -206,6 +207,14 @@ object CastColumnsLens
     )
   }
 
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    config: JsValue, 
+    friendlyName: String
+  ) = Seq[Reason]()
 }
 
 

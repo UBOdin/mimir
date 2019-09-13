@@ -3,8 +3,9 @@ package mimir.lenses.mono
 import java.sql.SQLException
 import play.api.libs.json._
 import sparsity.Name
-import mimir.algebra._
 import mimir.Database
+import mimir.algebra._
+import mimir.ctables.Reason
 import mimir.lenses._
 import mimir.nullables.InvalidValueHandler
 import mimir.parser.ExpressionParser
@@ -117,4 +118,14 @@ object DomainLens extends MonoLens
       )
     }
   }
+
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    configJson: JsValue, 
+    friendlyName: String
+  ) = Seq[Reason]()
+
 }

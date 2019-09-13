@@ -5,16 +5,23 @@ import play.api.libs.json._
 import sparsity.Name
 import mimir.Database
 import mimir.algebra._
+import mimir.ctables.Reason
 import mimir.lenses._
+import mimir.parser.ExpressionParser
 import mimir.util.NameLookup
 import mimir.serialization.AlgebraJson._
-import mimir.parser.ExpressionParser
 
 case class CommentLensConfig(
   target: Option[ID],
   message: Expression,
   condition: Option[Expression] = None
 )
+{
+  def isWholeTable = 
+    (target == None) && 
+    (condition == None) && 
+    ExpressionUtils.getColumns(message).isEmpty
+}
 object CommentLensConfig
 {
   implicit val format:Format[CommentLensConfig] = Json.format
@@ -82,6 +89,7 @@ object CommentLens extends MonoLens
                 )
             } { e }
 
+    if(config.isWholeTable){ return query }
     config.target match {
       case None => 
         query.filter { applyWarning(BoolPrimitive(true)) }
@@ -91,5 +99,26 @@ object CommentLens extends MonoLens
         )
     }
   }
+
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    configJson: JsValue, 
+    friendlyName: String
+  ): Seq[Reason] =
+  {
+    val config = configJson.as[CommentLensConfig]
+    if(config.isWholeTable){
+      Seq(Reason(
+        name,
+        Seq(),
+        db.interpreter.evalString(config.message),
+        db.lenses.areAllAcknowledged(name)
+      ))
+    } else { Seq() }
+  }
+
 
 }

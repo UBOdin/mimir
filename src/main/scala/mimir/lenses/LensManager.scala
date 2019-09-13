@@ -25,17 +25,18 @@ class LensManager(db: Database)
   val lensTypes = Map[ID,Lens](
     ID("TYPE_INFERENCE")    -> CastColumnsLens,
     ID("GUESS_TYPES")       -> CastColumnsLens,
+    ID("COMMENT")           -> CommentLens,
+    ID("DATASOURCE_ERRORS") -> DataSourceErrors,
     ID("DETECT_HEADER")     -> DetectHeadersLens,
     ID("MISSING_VALUE")     -> DomainLens,
     ID("DOMAIN")            -> DomainLens,
+    ID("PICKER")            -> MergeColumnLens,
+    ID("MERGE_COLUMNS")     -> MergeColumnLens,
+    ID("MISSING_KEY")       -> MissingKeyLens,
     ID("KEY_REPAIR")        -> RepairKeyLens,
     ID("REPAIR_KEY")        -> RepairKeyLens,
-    ID("COMMENT")           -> CommentLens,
-    ID("DATASOURCE_ERRORS") -> DataSourceErrors,
-    ID("PICKER")            -> MergeColumnLens,
-    ID("MISSING_KEY")       -> MissingKeyLens,
+    ID("SHAPE_WATCHER")     -> ShapeWatcherLens,
 
-    ID("MERGE_COLUMNS")     -> MergeColumnLens,
     ID("GEOCODE")           -> GeocodingLens
   )
 
@@ -173,6 +174,21 @@ class LensManager(db: Database)
       queryForDetails(details),
       configForDetails(details)
     )
+  }
+
+  def warningsFor(
+    schema: Option[ID], 
+    table: ID, 
+    cols: Seq[ID]
+  ): Seq[Reason] =
+  {
+    val (lens, query, config) = get(schema.getOrElse { table })
+    lens match {
+      case mono:MonoLens => mono.
+
+    }
+
+    val get(lens)
   }
 
 

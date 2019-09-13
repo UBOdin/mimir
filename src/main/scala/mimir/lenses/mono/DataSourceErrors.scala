@@ -6,6 +6,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.Database
 import mimir.algebra._
+import mimir.ctables._
 import mimir.lenses._
 
 
@@ -60,4 +61,14 @@ object DataSourceErrors
                   DATASOURCE_ERROR_COLUMN,
                   DATASOURCE_ERROR_ROW_COLUMN
                )
+
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    configJson: JsValue, 
+    friendlyName: String
+  ) = Seq[Reason]()
+
 }

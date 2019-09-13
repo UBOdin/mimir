@@ -5,8 +5,9 @@ import play.api.libs.json._
 import sparsity.Name
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-import mimir.algebra._
 import mimir.Database
+import mimir.algebra._
+import mimir.ctables.Reason
 import mimir.lenses._
 import mimir.serialization.AlgebraJson._
 import mimir.statistics.{ DetectSeries, ColumnStepStatistics }
@@ -152,6 +153,15 @@ object MissingKeyLens
      .removeColumnsByID(config.key)
      .renameByID(ID("_MIMIR_MISSING_KEY") -> config.key)
   }
+
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    configJson: JsValue, 
+    friendlyName: String
+  ) = Seq[Reason]()
 }
 
 // package mimir.lenses

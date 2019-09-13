@@ -6,8 +6,9 @@ import play.api.libs.json._
 import sparsity.Name
 import mimir.Database
 import mimir.algebra._
-import mimir.lenses._
+import mimir.ctables.Reason
 import mimir.exec.mode.UnannotatedBestGuess
+import mimir.lenses._
 import mimir.util.NameLookup
 import mimir.serialization.AlgebraJson._
 
@@ -234,5 +235,27 @@ object DetectHeadersLens
     }
   }
 
+  def warnings(
+    db: Database, 
+    name: ID, 
+    query: Operator, 
+    cols: Seq[ID],
+    configJson: JsValue, 
+    friendlyName: String
+  ): Seq[Reason] =
+  {
+    val config = configJson.as[DetectHeadersLensConfig]
+
+    if(config.guess){
+      Seq(
+        Reason(
+          name,
+          Seq(),
+          s"I guessed that there ${if(config.header == None){"is not"}else{"is"}} a header row on $friendlyName",
+          false
+        )
+      )
+    } else { Seq() }
+  }
 
 }
