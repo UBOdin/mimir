@@ -31,7 +31,7 @@ object DataSourceErrors
     val warningModel = 
       new WarningModel(
         ID("MIMIR_DSE_WARNING_",viewName),
-        Seq(TRowId(), TString(), TString(), TString())
+        Seq(TRowId())
       )
 
     val columnIndexes = 

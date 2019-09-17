@@ -6,12 +6,25 @@ import org.apache.spark.sql.catalyst.expressions.{ ScalaUDF, CreateArray }
 import mimir.algebra._
 import mimir.models._
 import mimir.exec.spark._
+import org.apache.spark.sql.catalyst.expressions.KnownNotNull
+import org.apache.spark.sql.catalyst.expressions.Literal
 
 case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
   val sparkVarType = RAToSpark.getSparkType(model.varType(idx, model.argTypes(idx)))
-  val sparkArgs = (args ++ hints).toList.toSeq
-  val sparkArgTypes = (model.argTypes(idx).map(arg => RAToSpark.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => RAToSpark.getSparkType(hint))).toList.toSeq
-    
+  val (sparkArgsArgs,sparkArgsArgTypes) = args.zip(model.argTypes(idx)).toList.toSeq.map {
+    case (Literal(null,_), _) => None
+    case x => Some(x)
+  }.flatMap(x => x).unzip
+  val (sparkArgsHints,sparkArgsHintTypes) = hints.zip(model.hintTypes(idx)).toList.toSeq.map {
+    case (Literal(null,_), _) => None
+    case x => Some(x)
+  }.flatMap(x => x).unzip
+  
+  val sparkArgs = (sparkArgsArgs ++ sparkArgsHints)
+  val sparkArgTypes = (sparkArgsArgTypes ++ sparkArgsHintTypes).toList.toSeq.map(arg => RAToSpark.getSparkType(arg
+      ))
+  //println(s"-------------------------> BestGuessUDF: sparkVarType: $sparkVarType\n------------\nsparkArgs:${sparkArgs.mkString("\n")}\n--------------\nsparkArgTypes:${sparkArgTypes.mkString("\n")}")
+      
   def extractArgsAndHints(args:Seq[Any]) : (Seq[PrimitiveValue],Seq[PrimitiveValue]) ={
     try{
       val getParamPrimitive:(Type, Any) => PrimitiveValue = if(sparkArgs.length > 22) (t, v) => {
@@ -21,12 +34,12 @@ case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[org.apache
         }
       }
       else getPrimitive _
-      val argList =
-        model.argTypes(idx).
+        val argList =
+         sparkArgsArgTypes.
           zipWithIndex.
           map( arg => getParamPrimitive(arg._1, args(arg._2)))
         val hintList = 
-          model.hintTypes(idx).
+         sparkArgsHintTypes.
             zipWithIndex.
             map( arg => getParamPrimitive(arg._1, args(argList.length+arg._2)))
         (argList,hintList)  

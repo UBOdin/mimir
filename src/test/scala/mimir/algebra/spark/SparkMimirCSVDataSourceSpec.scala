@@ -70,7 +70,7 @@ object SparkMimirCSVDataSourceSpec
       val resultDet = query("""
           SELECT * FROM CORRUPT
         """)(_.toList.map(row => {
-          (row.tuple, row.tuple.zipWithIndex.map(el => row.isColDeterministic(el._2)))
+          (row.tuple, row.tuple.zipWithIndex.map(el => row.isColDeterministic(el._2)).toList)
         }).unzip)
         
         val result = resultDet._1
@@ -90,37 +90,27 @@ object SparkMimirCSVDataSourceSpec
           val det = resultDet._2
           det must be equalTo List(
            List(true, true, true), 
-           List(true, true, true), 
-           List(true, true, true), 
-           List(false, false, false), 
-           List(true, true, true), 
-           List(false, false, false), 
-           List(true, true, true)   
-          )
+              List(true, true, true),
+              List(true, true, true), 
+              List(false, true, true), 
+              List(true, true, true), 
+              List(true, false, false), 
+              List(true, true, true)
+           )
+              
         }
         
         "Explain the errors" >> {
           val resultSets = db.uncertainty.explainEverything(table("CORRUPT"))
           val results = resultSets.flatMap(_.all(db)).map { _.toString }
-          
-          results must contain(
-            "The value [ NULL ] is uncertain because there is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268', '_c1', NULL, '-------'] }}"
-            )
-          results must contain(
-            "The value [ NULL ] is uncertain because there is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268', '_c2', NULL, '-------'] }}"
-            )
-          results must contain(
-            "The value [ klj8 ] is uncertain because there is an error(s) in the data source on row 1268020403 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['1268020403', '_c1', 'klj8', '2,klj8,lmlkjh8,jij9,1'] }}"
-            )
-          results must contain(
-            "The value [ ------- ] is uncertain because there is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268', '_c0', '-------', '-------'] }}"
-            )
-          results must contain(
-            "The value [ lmlkjh8 ] is uncertain because there is an error(s) in the data source on row 1268020403 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['1268020403', '_c2', 'lmlkjh8', '2,klj8,lmlkjh8,jij9,1'] }}"
-            )
-          results must contain(
-              "The value [ 2 ] is uncertain because there is an error(s) in the data source on row 1268020403 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['1268020403', '_c0', '2', '2,klj8,lmlkjh8,jij9,1'] }}"
-            )
+          println(results)
+          results must contain( eachOf(
+            """There is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268'] }}""",
+            """Couldn't Cast [ klj8 ] to int on row 1268020403 of corrupt._c1 {{ MIMIR_TI_WARNING_corrupt_TI['_c1', 'klj8', 'int', '1268020403'] }}""",
+            """There is an error(s) in the data source on row 1268020403 of corrupt. The raw value of the row in the data source is [ 2,klj8,lmlkjh8,jij9,1 ] {{ MIMIR_DSE_WARNING_corrupt_DSE['1268020403'] }}""",
+            """Couldn't Cast [ ------- ] to int on row -735214268 of corrupt._c0 {{ MIMIR_TI_WARNING_corrupt_TI['_c0', '-------', 'int', '-735214268'] }}""",
+            """Couldn't Cast [ lmlkjh8 ] to int on row 1268020403 of corrupt._c2 {{ MIMIR_TI_WARNING_corrupt_TI['_c2', 'lmlkjh8', 'int', '1268020403'] }}"""
+           ))
         }
     }
     

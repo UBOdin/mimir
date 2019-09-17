@@ -108,7 +108,7 @@ object MimirVizier extends LazyLogging {
         else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
         else Level.DEBUG
        
-      val mimirVizierLoggers = Seq("mimir.exec.spark.MimirSpark", this.getClass.getName, 
+      val mimirVizierLoggers = Seq("mimir.exec.spark.RAToSpark", "mimir.exec.spark.MimirSpark", this.getClass.getName, 
           "mimir.api.MimirAPI", "mimir.api.MimirVizierServlet", "mimir.data.staging.HDFSRawFileProvider")
       mimirVizierLoggers.map( mvLogger => {
         LoggerFactory.getLogger(mvLogger) match {
