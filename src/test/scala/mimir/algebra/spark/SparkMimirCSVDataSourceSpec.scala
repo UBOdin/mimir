@@ -103,7 +103,6 @@ object SparkMimirCSVDataSourceSpec
         "Explain the errors" >> {
           val resultSets = db.uncertainty.explainEverything(table("CORRUPT"))
           val results = resultSets.flatMap(_.all(db)).map { _.toString }
-          println(results)
           results must contain( eachOf(
             """There is an error(s) in the data source on row -735214268 of corrupt. The raw value of the row in the data source is [ ------- ] {{ MIMIR_DSE_WARNING_corrupt_DSE['-735214268'] }}""",
             """Couldn't Cast [ klj8 ] to int on row 1268020403 of corrupt._c1 {{ MIMIR_TI_WARNING_corrupt_TI['_c1', 'klj8', 'int', '1268020403'] }}""",
