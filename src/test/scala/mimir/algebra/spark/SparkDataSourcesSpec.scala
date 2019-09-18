@@ -309,8 +309,7 @@ object SparkDataSourcesSpec
         // )
         
       }
-    }
-    
+    }    
     
     /*"For jdbc data sources" should {
         "Be able to query from a mysql source" >> {
@@ -364,6 +363,60 @@ object SparkDataSourcesSpec
       }
     }*/
     
+    
+    "For PDF data source" should {
+
+      "Be able to load a PDF data source" >> {
+        db.loader.loadTable(
+          sourceFile = "test/data/sample.pdf", 
+          targetTable = Some(ID("P")), 
+          inferTypes = Some(true), 
+          detectHeaders = Some(false), 
+          format = FileFormat.PDF,
+          sparkOptions = Map( "pages" -> "all", "gridLines" -> "true")
+        )   
+        ok
+      }
+      
+      "Be able to query from a PDF source" >> {
+        val result = query("""
+          SELECT * FROM P
+        """)(_.toList.map(_.tuple.toList)).toList
+        
+         
+        result must contain( eachOf(
+            List(str("01/04/2017"),	f(62.48),	f(62.75),	f(62.12),	f(62.3), str("21,325,140")),
+            List(str("01/03/2017"),	f(62.79),	f(62.84),	f(62.125), f(62.58), str("20,655,190")),
+            List(str("12/30/2016"),	f(62.96),	f(62.99),	f(62.03),	f(62.14),	str("25,575,720"))
+            ))
+      }
+      
+      "Be able to load a PDF data source with page and area" >> {
+        db.loader.loadTable(
+          sourceFile = "test/data/sample-area.pdf", 
+          targetTable = Some(ID("PA")), 
+          inferTypes = Some(true), 
+          detectHeaders = Some(true), 
+          format = FileFormat.PDF,
+          sparkOptions = Map( "pages" -> "1", "guessArea" -> "true"/*"area" -> "104.99;379.05;380.91;469.8"*/, "gridLines" -> "true")
+        )   
+        ok
+      }
+      
+      "Be able to query from a PDF source" >> {
+        val result = query("""
+          SELECT * FROM PA
+        """)(_.toList.map(_.tuple.toList)).toList
+        
+         
+        result must be equalTo List(
+            List(i(5), str("3, 5, 4")), 
+            List(i(10), str("7, 8, 6")), 
+            List(i(15), str("11, 10, 12")), 
+            List(i(20), str("15, 13, 14"))
+            )
+      }
+    }
     
   }
 }

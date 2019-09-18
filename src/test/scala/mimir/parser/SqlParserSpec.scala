@@ -1,4 +1,4 @@
-package mimir.sql;
+package mimir.parser;
 
 import java.io.{StringReader,BufferedReader,FileReader,File}
 import java.sql.SQLException

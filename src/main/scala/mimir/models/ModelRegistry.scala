@@ -99,8 +99,8 @@ object ModelRegistry
    * to add new models here.
    */
   val imputations = Map[ID,ImputationConstructor](
-    (ID("SPARKML") -> (SparkClassifierModel.train _)),
-    (ID("INTERPOLATE") -> (SeriesMissingValueModel.train _))
+    (ID("SPARKML") -> (SparkClassifierModel.train _))
+    // (ID("INTERPOLATE") -> (SeriesMissingValueModel.train _))
     //("FUNCDEP" -> (FuncDepModel.train _))
   )
 

@@ -93,6 +93,7 @@ object MissingValueLens extends LazyLogging {
             }
           }:_*
       )
+    logger.trace(s"Safe query: ${noErroneousValuesQuery}")
 
     val modelsByType: Seq[(ID, Seq[(ID, (Model, Int, Seq[Expression]))])] =
       ModelRegistry.imputations.toSeq.map {
@@ -118,6 +119,7 @@ object MissingValueLens extends LazyLogging {
       modelEntities: Seq[Model]
     ) = 
       LensUtils.extractModelsByColumn(modelsByType)
+    logger.trace(s"Candidate Models: ${candidateModels.keys.mkString(", ")}")
 
     // Sanity check...
     targetColumnsAndTests.keySet.foreach( target => {

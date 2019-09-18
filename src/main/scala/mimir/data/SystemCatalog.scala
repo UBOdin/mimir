@@ -3,6 +3,7 @@ package mimir.data
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import java.sql.SQLException
 import sparsity.Name
+import play.api.libs.json._
 
 import mimir.Database
 import mimir.algebra._
@@ -10,6 +11,8 @@ import mimir.data._
 import mimir.views.{ ViewManager, TemporaryViewManager }
 import mimir.util.ExperimentalOptions
 import mimir.exec.spark.MimirSpark
+import mimir.metadata.MetadataManyMany
+import mimir.ctables.CoarseDependency
 
 class SystemCatalog(db: Database)
   extends LazyLogging
@@ -18,6 +21,7 @@ class SystemCatalog(db: Database)
   // Note, we use String in this map instead of ID, since ID 
   private val simpleSchemaProviders = scala.collection.mutable.LinkedHashMap[ID, SchemaProvider]()
   private var preferredMaterializedTableProvider: ID = null
+  var coarseDependencies: MetadataManyMany = null
 
   def init()
   {
@@ -48,6 +52,10 @@ class SystemCatalog(db: Database)
     }
     registerSchemaProvider(LoadedTables.SCHEMA, db.loader)
     registerSchemaProvider(SystemCatalog.SCHEMA, this.CatalogSchemaProvider)
+
+    coarseDependencies = db.metadata.registerManyMany(
+      ID("MIMIR_COARSE_DEPENDENCIES")
+    )
   }
 
   def registerSchemaProvider(name: ID, provider: SchemaProvider)
@@ -193,6 +201,14 @@ class SystemCatalog(db: Database)
             .map { (providerID, _, provider)}
   }
 
+  def resolveTable(providerNameMaybe: Option[Name], table: Name): Option[(ID, ID, SchemaProvider)] =
+  {
+    providerNameMaybe match {
+      case None => resolveTable(table)
+      case Some(providerName) => resolveTable(providerName, table)
+    }
+  }
+
   def resolveTable(providerID: ID, table: ID): Option[(ID, ID, SchemaProvider)] =
   {
     val (_, provider) = 
@@ -303,6 +319,72 @@ class SystemCatalog(db: Database)
     allSchemaProviders.flatMap { _._2.listTables }
                       .toSet
   }
+
+  private def safeAssembleIdentifierPair(pair: (ID, ID)): ID = 
+  {
+    ID(Seq(pair._1, pair._2).map { 
+      _.id
+       .replaceAll("[\\\\]", "\\\\")
+       .replaceAll("[.]", "\\\\.")
+    }.mkString("."))
+  }
+
+  /**
+   * Register a coarse-grained provenance relationship.
+   * @param   target    The table affected by the provenance relationship
+   * @param   source    The schema/table from which [target] received input
+   *
+   * Support for coarse-grained provenance relationships between tables.
+   * In general, we want all inter-table relationships to be given explicitly
+   * through views.  However, in some cases, it becomes necessary to pipe
+   * a table through an external process like a python script.  See:
+   * - https://github.com/VizierDB/web-ui/issues/116
+   * - https://github.com/UBOdin/mimir/issues/319
+   * In these cases, we still want to preserve the relationship between
+   * the table(s) read by the external process and the tables written out
+   * by the external process to propagate VGTerm/DataWarnings through.
+   * 
+   * This function registers such a relationship. 
+   */
+  def createDependency(target: (ID, ID), source: CoarseDependency)
+  {
+    coarseDependencies.add(
+      safeAssembleIdentifierPair(target), 
+      ID(Json.stringify(Json.toJson(source)))
+    )
+  }
+
+  /**
+   * Deregister a coarse-grained provenance relationship.
+   * @param   target    The table affected by the provenance relationship
+   * @param   source    The schema/table from which [target] received input
+   * 
+   * See the discussion of addProvenance
+   */
+  def dropDependency(target: (ID, ID), source: CoarseDependency)
+  {
+    coarseDependencies.rm(
+      safeAssembleIdentifierPair(target), 
+      ID(Json.stringify(Json.toJson(source)))
+    )
+  }
+
+  /**
+   * Retrieve all coarse-grained provenance relationships for a table.
+   * @param   target    The table affected by the provenance relationship
+   * @param   source    The schema/table from which [target] received input
+   * 
+   * See the discussion of addProvenance
+   */
+  def getDependencies(target: (ID, ID)): Seq[CoarseDependency] =
+  {
+    coarseDependencies.getByLHS(
+      safeAssembleIdentifierPair(target)
+    ).map { dep =>
+      Json.parse(dep.id).as[CoarseDependency]
+    }
+  }
+
 
   object CatalogSchemaProvider 
     extends ViewSchemaProvider 

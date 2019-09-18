@@ -53,6 +53,7 @@ object MimirSQL
     (
       analyzeFeatures // must come before 'analyze'
     | analyze
+    | alterTable
     | compare
     | createAdaptive // must come before 'basicStatement'
     | createLens     // must come before 'basicStatement'
@@ -77,36 +78,58 @@ object MimirSQL
   )
 
   def analyzeFeatures[_:P] = P(
-    StringInIgnoreCase("ANALYZE") ~
-    StringInIgnoreCase("FEATURES") ~/
-    StringInIgnoreCase("IN") ~
+    MimirKeyword("ANALYZE") ~
+    MimirKeyword("FEATURES") ~/
+    MimirKeyword("IN") ~
     SQL.select.map { AnalyzeFeatures(_) }
   )
   def analyze[_:P] = P(
     (
-      StringInIgnoreCase("ANALYZE") ~
+      MimirKeyword("ANALYZE") ~
       (
-        StringInIgnoreCase("WITH") ~/
-        StringInIgnoreCase("ASSIGNMENTS").map { _ => true }
+        MimirKeyword("WITH") ~/
+        MimirKeyword("ASSIGNMENTS").map { _ => true }
       ).?.map { _.getOrElse(false) } ~
       (
         Sparsity.identifier ~
-        StringInIgnoreCase("OF")
+        MimirKeyword("OF")
       ).? ~
       (
         Sparsity.quotedString.map { StringPrimitive(_) } ~
-        StringInIgnoreCase("IN")
+        MimirKeyword("IN")
       ).? ~
       SQL.select
     ).map { case (withAssignments, column, row, query) =>
       Analyze(query, column, row, withAssignments)
     }
   )
+
+  def alterTableOperation[_:P] = P[AlterTableOperation](
+    ( 
+      MimirKeyword("CREATE") ~ MimirKeyword("DEPENDENCY") ~/
+      Sparsity.dottedPair.map { schemaAndTable => CreateDependency(schemaAndTable._1, 
+                                                                   schemaAndTable._2)}
+    ) | (
+      MimirKeyword("DROP") ~ MimirKeyword("DEPENDENCY") ~/
+      Sparsity.dottedPair.map { schemaAndTable => DropDependency(schemaAndTable._1, 
+                                                                 schemaAndTable._2)}
+    )
+  )
+  
+  def alterTable[_:P] = P(
+    (
+      MimirKeyword("ALTER") ~
+      MimirKeyword("TABLE") ~/
+      Sparsity.dottedPair ~
+      alterTableOperation
+    ).map { case (targetSchema, target, operator) => AlterTable(targetSchema, target, operator) }
+  )
+
   def compare[_:P] = P(
     (
-      StringInIgnoreCase("COMPARE") ~/
+      MimirKeyword("COMPARE") ~/
       SQL.select ~
-      StringInIgnoreCase("WITH") ~/
+      MimirKeyword("WITH") ~/
       SQL.select
     ).map { case (target, expected) => 
       Compare(target, expected)
@@ -115,13 +138,13 @@ object MimirSQL
 
   def createAdaptive[_:P] = P(
     (
-      StringInIgnoreCase("CREATE") ~
-      StringInIgnoreCase("ADAPTIVE") ~/
-      StringInIgnoreCase("SCHEMA") ~/
+      MimirKeyword("CREATE") ~
+      MimirKeyword("ADAPTIVE") ~/
+      MimirKeyword("SCHEMA") ~/
       Sparsity.identifier ~
-      StringInIgnoreCase("AS") ~/
+      MimirKeyword("AS") ~/
       SQL.select ~
-      StringInIgnoreCase("WITH") ~/
+      MimirKeyword("WITH") ~/
       Sparsity.identifier ~
       "(" ~ ExprParser.expressionList ~ ")"
     ).map { case (name, query, lensType, args) =>
@@ -130,12 +153,12 @@ object MimirSQL
   )
   def createLens[_:P] = P(
     (
-      StringInIgnoreCase("CREATE") ~
-      StringInIgnoreCase("LENS") ~/
+      MimirKeyword("CREATE") ~
+      MimirKeyword("LENS") ~/
       Sparsity.identifier ~
-      StringInIgnoreCase("AS") ~/
+      MimirKeyword("AS") ~/
       SQL.select ~
-      StringInIgnoreCase("WITH") ~/
+      MimirKeyword("WITH") ~/
       Sparsity.identifier ~
       "(" ~ ExprParser.expressionList ~ ")"
     ).map { case (name, query, lensType, args) => 
@@ -145,9 +168,9 @@ object MimirSQL
 
   def dropAdaptive[_:P] = P(
     (
-      StringInIgnoreCase("DROP") ~
-      StringInIgnoreCase("ADAPTIVE") ~/
-      StringInIgnoreCase("SCHEMA") ~/
+      MimirKeyword("DROP") ~
+      MimirKeyword("ADAPTIVE") ~/
+      MimirKeyword("SCHEMA") ~/
       SQL.ifExists ~
       Sparsity.identifier
     ).map { case (ifExists, name) =>
@@ -157,8 +180,8 @@ object MimirSQL
 
   def dropLens[_:P] = P(
     (
-      StringInIgnoreCase("DROP") ~
-      StringInIgnoreCase("LENS") ~/
+      MimirKeyword("DROP") ~
+      MimirKeyword("LENS") ~/
       SQL.ifExists ~
       Sparsity.identifier
     ).map { case (ifExists, name) =>
@@ -181,15 +204,15 @@ object MimirSQL
 
   def drawPlot[_:P] = P(
     (
-      StringInIgnoreCase("DRAW") ~/
-      StringInIgnoreCase("PLOT") ~/
+      MimirKeyword("DRAW") ~/
+      MimirKeyword("PLOT") ~/
       SQL.fromElement ~
       (
-        StringInIgnoreCase("WITH") ~/
+        MimirKeyword("WITH") ~/
         argument.rep( sep = "," )
       ).?.map { _.toSeq.flatten } ~
       (
-        StringInIgnoreCase("USING") ~/
+        MimirKeyword("USING") ~/
         plotLine.rep( sep = "," )
       ).?.map { _.toSeq.flatten }
     ).map { case (body, args, lines) => 
@@ -198,37 +221,37 @@ object MimirSQL
   )
   def load[_:P] = P(
     (
-      StringInIgnoreCase("LOAD") ~/
+      MimirKeyword("LOAD", "LINK").! ~/
       Sparsity.quotedString ~
       (
-        StringInIgnoreCase("AS") ~/
+        MimirKeyword("AS") ~/
         Sparsity.identifier ~/
         (
           "(" ~/ argument.rep( sep = "," ) ~ ")"
         ).?.map { _.getOrElse(Seq()) }
       ).? ~
       (
-        StringInIgnoreCase("INTO") ~/
+        MimirKeyword("INTO") ~/
         Sparsity.identifier
       ).? ~
       ( 
-        StringInIgnoreCase("WITH") ~/
-        StringInIgnoreCase("STAGING").!.map { _.toUpperCase }
+        MimirKeyword("WITH") ~/
+        MimirKeyword("STAGING").!.map { _.toUpperCase }
       ).?
     ).map { 
-      case (file, Some((format, args)), target, staging) =>
-        Load(file, target, Some(format), args, staging != None)
-      case (file, None, target, staging) =>
-        Load(file, target, None, Seq(), staging != None)
+      case (loadOrLink, file, Some((format, args)), target, staging) =>
+        Load(file, target, Some(format), args, staging != None, loadOrLink.equalsIgnoreCase("LINK"))
+      case (loadOrLink, file, None, target, staging) =>
+        Load(file, target, None, Seq(), staging != None, loadOrLink.equalsIgnoreCase("LINK"))
     }
   )
   def reload[_:P] = P(
-    StringInIgnoreCase("RELOAD") ~/
+    MimirKeyword("RELOAD") ~/
     Sparsity.identifier.map { Reload(_) }
   )
   def feedback[_:P] = P(
     (
-      StringInIgnoreCase("FEEDBACK") ~/
+      MimirKeyword("FEEDBACK") ~/
       (
         Sparsity.quotedIdentifier | 
         Sparsity.rawIdentifier.rep( sep = ":" ).map { 
@@ -241,7 +264,7 @@ object MimirSQL
         ExprParser.primitive.rep( sep = "," ) ~ 
         ")" 
       ).?.map { _.getOrElse(Seq()) } ~
-      StringInIgnoreCase("IS") ~/
+      MimirKeyword("IS") ~/
       ExprParser.primitive
     ).map { case (model, index, args, value) =>
       Feedback(model, index, args, value)

@@ -2,6 +2,7 @@ package mimir.algebra
 
 import sparsity.Name
 import scala.language.implicitConversions
+import play.api.libs.json._
 
 /**
  * Generic identifier wrapper for entities in Mimir.  
@@ -95,6 +96,7 @@ object ID
   def lower(id: Name)   = ID(id.lower)
   def upper(id: String) = ID(id.toUpperCase)
   def lower(id: String) = ID(id.toLowerCase)
+  implicit val format: Format[ID] = Json.format
 }
 
 object IDConversions

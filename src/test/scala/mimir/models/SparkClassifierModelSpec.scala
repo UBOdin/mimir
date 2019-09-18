@@ -77,22 +77,27 @@ object SparkClassifierModelSpec extends SQLTestSpecification("SparkClassifierTes
     }
 
     "Make reasonable predictions" >> {
-      queryOneColumn("SELECT ROWID() FROM CPUSPEED"){ result =>
-        val rowids = result.toSeq
-        val predictions = 
-          rowids.map {
-            rowid => (
-              predict(ID("CORES"), rowid.asString),
-              trueValue(ID("CORES"), rowid.asString)
-            )
-          }
-        //println(predictions.toList)
-        val successes = 
-          predictions.
-            map( x => if(x._1.equals(x._2)){ 1 } else { 0 } ).
-            fold(0)( _+_ )
-        successes must be >=(rowids.size / 3)
-      }
+      db.query(
+        db.table("CPUSPEED")
+          .addColumns( "ROWID" -> RowIdVar())
+          .projectByID(ID("CORES"), ID("ROWID"))
+          .filter(Var(ID("CORES")).isNull))(
+        result => {
+              val rowids = result.toSeq
+              val predictions = 
+                rowids.map {
+                  rowid => (
+                    predict(ID("CORES"), rowid(0).asString),
+                    trueValue(ID("CORES"), rowid(0).asString)
+                  )
+                }
+              val successes = 
+                predictions.
+                  map( x => if(x._1.equals(x._2)){ 1 } else { 0 } ).
+                  fold(0)( _+_ )
+              successes must be >=(rowids.size / 3)
+            }
+        )
     }
   }
 

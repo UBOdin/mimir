@@ -31,7 +31,7 @@ object DataSourceErrors
     val warningModel = 
       new WarningModel(
         ID("MIMIR_DSE_WARNING_",viewName),
-        Seq(TRowId(), TString(), TString(), TString())
+        Seq(TRowId())
       )
 
     val columnIndexes = 
@@ -77,32 +77,32 @@ object DataSourceErrors
         
   def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] =
   {
-    val dataCols = config.query.columnNames.filterNot(col => col.equals(mimirDataSourceErrorColumn) || col.equals(mimirDataSourceErrorRowColumn))
     if(table.equals(ID("DATA"))){
-     Some(Project(
-        dataCols.map { colName => {
-          ProjectArg(colName, 
-            Conditional(
-              Var(mimirDataSourceErrorColumn),
-              DataWarning(
-                config.schema.withPrefix("MIMIR_DSE_WARNING_"),
-                Var(colName),
-                Function("CONCAT", 
-                  StringPrimitive("The value [ "),
-                  Conditional(IsNullExpression(Var(colName)),StringPrimitive("NULL"),Var(colName)),
-                  StringPrimitive(" ] is uncertain because there is an error(s) in the data source on row "),
-                  RowIdVar(),
-                  StringPrimitive(s" of ${config.humanReadableName}. The raw value of the row in the data source is [ "),
-                  Var(mimirDataSourceErrorRowColumn),
-                  StringPrimitive(" ]")
-                ),
-                Seq(RowIdVar(), StringPrimitive(colName.id), Var(colName), Var(mimirDataSourceErrorRowColumn))
-              ),
-              Var(colName)
-            )
-          )
-        }}, config.query
-      ))  
+      // query -> 
+      //   Select( if(hasError){ Warning(True) } else { True }, query )
+      Some(
+        config.query
+              .filter { 
+                Var(mimirDataSourceErrorColumn).thenElse {
+                  DataWarning(
+                    config.schema.withPrefix("MIMIR_DSE_WARNING_"),
+                    BoolPrimitive(true),
+                    Function("CONCAT", 
+                      StringPrimitive("There is an error(s) in the data source on row "),
+                      RowIdVar(),
+                      StringPrimitive(s" of ${config.humanReadableName}. The raw value of the row in the data source is [ "),
+                      Var(mimirDataSourceErrorRowColumn),
+                      StringPrimitive(" ]")
+                    ),
+                    Seq(RowIdVar())
+                  )
+                } { BoolPrimitive(true) }
+              }
+              .removeColumnsByID(
+                mimirDataSourceErrorColumn,
+                mimirDataSourceErrorRowColumn
+              )
+      )
     } else { None }
   }
 

@@ -66,8 +66,12 @@ case class Load(
   table: Option[Name],
   format: Option[Name],
   args: Seq[(String, sparsity.expression.PrimitiveValue)],
-  withStaging: Boolean
+  withStaging: Boolean,
+  linkOnly: Boolean
 ) extends MimirStatement
+{
+  def formatOrElse(alt: String) = format.getOrElse { sparsity.Name(alt) }
+}
 
 case class Reload(
   table: Name
@@ -81,4 +85,10 @@ case class DropLens(
 case class DropAdaptiveSchema(
   schema: Name,
   ifExists: Boolean = false
+) extends MimirStatement
+
+case class AlterTable(
+  targetSchema: Option[Name],
+  target: Name,
+  op: AlterTableOperation
 ) extends MimirStatement
