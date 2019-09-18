@@ -58,8 +58,28 @@ object Classification extends SparkML {
     import sqlContext.implicits._ 
     if(predictions.columns.contains("probability")){
       val provCol = predictions.schema.fields(predictions.schema.fields.map(_.name).indexOf("label")-1).name
-      val rowidsProbabilitiesIdxs = predictions.select(provCol,"probability").rdd.map(r => (r.getString(0), r.getAs[org.apache.spark.ml.linalg.DenseVector](1))).collect().map { item =>
-          item._2.toArray.zipWithIndex.sortBy(_._1).reverse.slice(0, maxPredictions).map(probIdx => (item._1, probIdx._1, probIdx._2))}.flatten.toSeq
+      val rowidsProbabilitiesIdxs = 
+        predictions.select(provCol,"probability")
+                   .rdd.map { r => 
+                      (
+                        r.get(0).toString, 
+                        r.getAs[org.apache.spark.ml.linalg.DenseVector](1)
+                      )
+                   }
+                   .collect()
+                   .map { item =>
+                      item._2
+                          .toArray
+                          .zipWithIndex
+                          .sortBy { _._1 }
+                          .reverse
+                          .slice(0, maxPredictions)
+                          .map { probIdx => 
+                            (item._1, probIdx._1, probIdx._2)
+                          }
+                   }
+                   .flatten
+                   .toSeq
       model.stages(model.stages.length-1).transform(rowidsProbabilitiesIdxs.toDF(provCol,"probability","prediction")).select(provCol,"probability","predictedLabel").sort($"probability".desc,$"predictedLabel").map { x => (x.getString(0), (x.getString(2),x.getDouble(1))) }.collect()
     }
     else extractPredictionsNoProb(model, predictions, maxPredictions)
@@ -109,7 +129,7 @@ object Classification extends SparkML {
         case _ => None
       }
     }).unzip
-    val assmblerCols = cols.flatMap(col => {
+    val assmblerCols = cols.filterNot(_.name.equals(params.predictionCol.id)).flatMap(col => {
       col.dataType match {
         case StringType => Some(s"${col.name}_features")
         case IntegerType | LongType | DoubleType => Some(col.name)

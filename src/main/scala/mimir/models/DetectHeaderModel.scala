@@ -40,7 +40,7 @@ with SourcedFeedback
       name
         .replaceAll("[^a-zA-Z0-9]+", "_")    // Replace sequences of non-alphanumeric characters with underscores
         .replaceAll("_+$", "")               // Strip trailing underscores
-        .replaceAll("^_+", "")               // Strip leading underscores
+        .replaceAll("^[0-9_]+", "")          // Strip leading underscores and digits
     )
   }
   

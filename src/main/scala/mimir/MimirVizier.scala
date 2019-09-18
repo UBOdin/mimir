@@ -2,48 +2,50 @@ package mimir;
 
 import java.io._
 import java.util.Vector
+import java.util.UUID
+import java.net.InetAddress
+import java.net.URLDecoder
+
+import scala.collection.convert.Wrappers.JMapWrapper
+import scala.tools.reflect.ToolBox
+import scala.reflect.runtime.currentMirror
 
 import org.rogach.scallop._
+import org.slf4j.{LoggerFactory}
+import ch.qos.logback.classic.{Level, Logger}
+import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import sparsity.Name
 import sparsity.statement.CreateView
 import sparsity.parser.{SQL,Expression} 
-
 import fastparse.Parsed
 
-import mimir.algebra._
-import mimir.exec.result.Row
-import mimir.metadata.JDBCMetadataBackend
-import mimir.util.{ExperimentalOptions,Timer}
-//import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
-import mimir.exec.Compiler
-import mimir.exec.spark.{MimirSpark, MimirSparkRuntimeUtils}
-import mimir.ctables.Reason
-import org.slf4j.{LoggerFactory}
-import ch.qos.logback.classic.{Level, Logger}
-import com.typesafe.scalalogging.slf4j.LazyLogging
-import mimir.serialization.Json
-import mimir.util.LoggerUtils
-import mimir.ml.spark.SparkML
-import mimir.util.JSONBuilder
-import java.util.UUID
-import java.net.InetAddress
-import scala.collection.convert.Wrappers.JMapWrapper
-import mimir.algebra.function.SparkFunctions
-import java.net.URLDecoder
-import mimir.parser._
-import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
-
-import scala.reflect.runtime.currentMirror
-import scala.tools.reflect.ToolBox
-import java.io.File
-import mimir.exec.result.ResultIterator
 import org.apache.spark.sql.SparkSession
-import mimir.ctables.AnalyzeUncertainty
-import mimir.parser.ExpressionParser
-import mimir.ctables.MultiReason
-import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
+
+import mimir.algebra._
+import mimir.algebra.function.SparkFunctions
 import mimir.api.MimirAPI
+import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
+import mimir.ctables.AnalyzeUncertainty
+import mimir.ctables.MultiReason
+import mimir.ctables.Reason
+import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
+import mimir.exec.Compiler
+import mimir.exec.result.{ ResultIterator, Row }
+import mimir.exec.mode.{ UnannotatedBestGuess }
+import mimir.exec.spark.{MimirSpark, MimirSparkRuntimeUtils}
+import mimir.metadata.JDBCMetadataBackend
+import mimir.ml.spark.SparkML
+import mimir.parser._
+import mimir.parser.ExpressionParser
+import mimir.serialization.Json
+import mimir.data.staging.HDFSRawFileProvider
+import mimir.util.{
+  JSONBuilder,
+  LoggerUtils,
+  ExperimentalOptions,
+  Timer
+}
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -78,7 +80,10 @@ object MimirVizier extends LazyLogging {
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)
     val metadata = new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname())
-    val staging = new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
+    val staging = if(conf.dataStagingType().equalsIgnoreCase("hdfs") && ExperimentalOptions.isEnabled("remoteSpark"))
+      new HDFSRawFileProvider()
+    else 
+      new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
 
     db = new Database(metadata, staging)
     db.open()
@@ -103,8 +108,8 @@ object MimirVizier extends LazyLogging {
         else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
         else Level.DEBUG
        
-      val mimirVizierLoggers = Seq("mimir.backend.SparkBackend", this.getClass.getName, 
-          "mimir.api.MimirAPI", "mimir.api.MimirVizierServlet")
+      val mimirVizierLoggers = Seq("mimir.exec.spark.RAToSpark", "mimir.exec.spark.MimirSpark", this.getClass.getName, 
+          "mimir.api.MimirAPI", "mimir.api.MimirVizierServlet", "mimir.data.staging.HDFSRawFileProvider")
       mimirVizierLoggers.map( mvLogger => {
         LoggerFactory.getLogger(mvLogger) match {
           case logger: Logger => {
@@ -303,7 +308,7 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def unloadDataSource(input:String, file : String, format:String, backendOptions:Seq[Any]) : Unit = {
+  def unloadDataSource(input:String, file : String, format:String, backendOptions:Seq[Any]) : List[String] = {
     try{
       val timeRes = logTime("loadDataSource") {
         logger.debug("unloadDataSource: From Vistrails: [" + input + "] [" + file + "] [" + format + "] [ " + backendOptions.mkString(",") + " ]"  ) ;
@@ -325,8 +330,15 @@ object MimirVizier extends LazyLogging {
             bkOpts.toMap, 
             if(file == null || file.isEmpty()) None else Some(file)
           )
+          if(!(file == null || file.isEmpty())){
+            val filedir = new File(file)
+            filedir.listFiles.filter(_.isFile)
+              .map(_.getName).toList
+          }
+          else List[String]()
       }
       logger.debug(s"unloadDataSource Took: ${timeRes._2}")
+      timeRes._1
     } catch {
       case t: Throwable => {
         logger.error(s"Error Unloading Data: $file", t)
@@ -1169,13 +1181,13 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
   }
   
   def operCSVResults(oper : mimir.algebra.Operator) : DataContainer =  {
-    db.query(oper) { results => 
+    db.query(oper, UnannotatedBestGuess) { results => 
       val resCSV = scala.collection.mutable.Buffer[Seq[PrimitiveValue]]() 
       val prov = scala.collection.mutable.Buffer[String]()
       while(results.hasNext){
         val row = results.next()
         resCSV += row.tuple 
-        prov += row.provenance.asString
+        prov += ""//row.provenance.asString
       }
       
       DataContainer(
@@ -1236,7 +1248,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
 
 
   def operCSVResultsJson(oper : mimir.algebra.Operator) : String =  {
-    db.query(oper)(results => {
+    db.query(oper, UnannotatedBestGuess)(results => {
       val resultList = results.toList
       val (resultsStrs, prov) = resultList.map(row => (row.tuple.map(cell => cell), row.provenance.asString)).unzip
       JSONBuilder.dict(Map(

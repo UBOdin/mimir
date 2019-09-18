@@ -10,6 +10,8 @@ class NameLookup[T](private val elems: Seq[(Name, T)])
   def ++(other:NameLookup[T]) = new NameLookup(elems ++ other.elems)
   def values = elems.map { _._2 }
   def keys = elems.map { _._1 }
+  def hasKey(target: Name): Boolean = apply(target) != None
+  def all: Seq[(Name, T)] = elems
 }
 
 object NameLookup 

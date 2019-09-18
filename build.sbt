@@ -135,7 +135,7 @@ libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "0.9.5",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %%  "sparsity"                 % "1.4",
+  "info.mimirdb"                  %%  "sparsity"                 % "1.5",
   "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
@@ -159,6 +159,7 @@ libraryDependencies ++= Seq(
   "commons-io"                    %   "commons-io"               % "2.5",
   "com.github.wnameless"          %   "json-flattener"           % "0.2.2",
   "com.typesafe.play"             %%  "play-json"                % "2.5.0-M2",
+  "technology.tabula" 			  %	  "tabula" 					 % "1.0.3",
 
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
