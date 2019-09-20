@@ -25,15 +25,15 @@ object ErrorResponse {
   implicit val format: Format[ErrorResponse] = Json.format
 }
 
-case class ScalaEvalResponse (
+case class CodeEvalResponse (
             /* stdout from evaluation of scala code */
                   stdout: String,
             /* stderr from evaluation of scala code */
                   stderr: String
 ) extends Response
 
-object ScalaEvalResponse {
-  implicit val format: Format[ScalaEvalResponse] = Json.format
+object CodeEvalResponse {
+  implicit val format: Format[CodeEvalResponse] = Json.format
 }
 
 

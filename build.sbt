@@ -148,6 +148,7 @@ libraryDependencies ++= Seq(
   "com.amazonaws"                 %   "aws-java-sdk-s3"          % "1.11.234",
   "ch.cern.sparkmeasure"          %%  "spark-measure"            % "0.13",
   "org.scala-lang"                %   "scala-compiler"           % scalaVersion.value,
+  "org.ddahl" 					  %%  "rscala" 					 % "3.2.15",
   
   //////////////////////// Data Munging Tools //////////////////////
   "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",

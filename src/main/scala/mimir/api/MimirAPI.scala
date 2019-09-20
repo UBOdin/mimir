@@ -90,7 +90,10 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
             try{
               route match {
                 case "/eval/scala" => {
-                  Json.parse(text).as[ScalaEvalRequest].handle(os)
+                  Json.parse(text).as[CodeEvalRequest].handle(os)
+                }
+                case "/eval/R" => {
+                  Json.parse(text).as[CodeEvalRequest].handle(os)
                 }
                 case "/dataSource/load" => {
                   Json.parse(text).as[LoadRequest].handle(os)

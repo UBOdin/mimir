@@ -11,17 +11,22 @@ object Request {
   
 }
 
-case class ScalaEvalRequest (
+case class CodeEvalRequest (
             /* scala source code to evaluate*/
+                  language: String,
                   source: String
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(MimirVizier.evalScala(source))).getBytes )
+    language match {
+      case "R" => os.write(Json.stringify(Json.toJson(MimirVizier.evalR(source))).getBytes )
+      case "scala" => os.write(Json.stringify(Json.toJson(MimirVizier.evalScala(source))).getBytes )
+    }
+    
   }
 }
 
-object ScalaEvalRequest {
-  implicit val format: Format[ScalaEvalRequest] = Json.format
+object CodeEvalRequest {
+  implicit val format: Format[CodeEvalRequest] = Json.format
 }
 
 

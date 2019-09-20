@@ -25,7 +25,7 @@ import org.apache.spark.sql.SparkSession
 import mimir.algebra._
 import mimir.algebra.function.SparkFunctions
 import mimir.api.MimirAPI
-import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
+import mimir.api.{CodeEvalResponse, CreateLensResponse, DataContainer, Schema}
 import mimir.ctables.AnalyzeUncertainty
 import mimir.ctables.MultiReason
 import mimir.ctables.Reason
@@ -180,17 +180,67 @@ object MimirVizier extends LazyLogging {
   //Mimir API impls
   ///////////////////////////////////////////////
   var apiCallThread : Thread = null
-  def evalScala(source : String) : ScalaEvalResponse = {
+  def evalScala(source : String) : CodeEvalResponse = {
     try {
       val timeRes = logTime("evalScala") {
         Eval("import mimir.MimirVizier.vizierdb\n"+source) : String
       }
       logger.debug(s"evalScala Took: ${timeRes._2}")
-      ScalaEvalResponse(timeRes._1,"")
+      CodeEvalResponse(timeRes._1,"")
     } catch {
       case t: Throwable => {
         logger.error(s"Error Evaluating Scala Source", t)
-        ScalaEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
+        CodeEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
+      }
+    }
+  }
+  
+  
+  def evalR(source : String) : CodeEvalResponse = {
+    try {
+      val timeRes = logTime("evalR") {
+        val datasetMatch = """vizierdb\$getDataset\(\w*"([a-zA-Z0-9_-]+)"\w*\)""".r 
+        val (tmpNames, dsNames) = source.
+        split("\n").toSeq
+        .zipWithIndex
+        .flatMap(line => 
+          line._1 match {
+            case datasetMatch(dsName) => {
+              val tmpName = s"temp_view_${source.hashCode()}_${line._2}"
+              db.compiler.compileToSparkWithRewrites(db.table(dsName))
+                .createOrReplaceTempView(tmpName)
+                Some((tmpName, dsName))
+              }
+            case x => None
+        }).unzip
+        val rLibCode = s"""
+        library(SparkR)
+        sparkR.session(master = "${VizierDB.sparkSession.sparkContext.master}", sparkConfig = list(user.dir = "/home/mike/source/mimir", spark.driver.memory = "4g"))
+    
+    
+        tempNames <- c(${tmpNames.mkString(""""""", """", """", """"""")})
+        dsNames <- c(${dsNames.mkString(""""""", """", """", """"""")})
+        dsNameMap <- dict( init_keys=tempNames, initvalues=dsNames )
+        
+        vizierdb <- setRefClass("vizierdb",
+          methods = list(
+            getDataset = function(dsName) {
+              return(sql("SELECT * FROM " + dsNameMap[dsName]))
+            }
+          )
+        )
+        """ + source
+        val R = org.ddahl.rscala.RClient("R",0,true)
+        val ret = R.evalS0(rLibCode)
+        R.quit()
+        ret
+      }
+      logger.debug(s"evalScala Took: ${timeRes._2}")
+      CodeEvalResponse(timeRes._1,"")
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Evaluating R Source", t)
+        CodeEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
       }
     }
   }
