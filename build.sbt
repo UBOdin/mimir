@@ -161,7 +161,8 @@ libraryDependencies ++= Seq(
   "com.github.wnameless"          %   "json-flattener"           % "0.2.2",
   "com.typesafe.play"             %%  "play-json"                % "2.5.0-M2",
   "technology.tabula" 			  %	  "tabula" 					 % "1.0.3",
-
+  "org.apache.commons" 			  %   "commons-compress" 	 	 % "1.19",
+  
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
   // Used by the imputation lens
@@ -173,9 +174,9 @@ libraryDependencies ++= Seq(
   //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark"         %   "spark-sql_2.11"          % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark"         %   "spark-mllib_2.11"         % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark"         %   "spark-hive_2.11"        % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-sql_2.11"          % "2.4.4" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-mllib_2.11"         % "2.4.4" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-hive_2.11"        % "2.4.4" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "com.databricks"           %   "spark-xml_2.11"            % "0.5.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "com.crealytics"           %%  "spark-excel"          % "0.11.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "com.github.potix2"        %%  "spark-google-spreadsheets" % "0.6.1",

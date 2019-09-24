@@ -6,6 +6,7 @@ import java.util.UUID
 import java.net.InetAddress
 import java.net.URLDecoder
 
+import scala.collection.mutable.HashMap
 import scala.collection.convert.Wrappers.JMapWrapper
 import scala.tools.reflect.ToolBox
 import scala.reflect.runtime.currentMirror
@@ -41,6 +42,7 @@ import mimir.parser.ExpressionParser
 import mimir.serialization.Json
 import mimir.data.staging.HDFSRawFileProvider
 import mimir.util.{
+  HadoopUtils,
   JSONBuilder,
   LoggerUtils,
   ExperimentalOptions,
@@ -175,15 +177,16 @@ object MimirVizier extends LazyLogging {
       explainEverything(oper).mkString("<br><br>")
     }
   }
-  
+    
   //-------------------------------------------------
   //Mimir API impls
   ///////////////////////////////////////////////
   var apiCallThread : Thread = null
-  def evalScala(source : String) : CodeEvalResponse = {
+  def evalScala(inputs: Map[String,String], source : String) : CodeEvalResponse = {
     try {
       val timeRes = logTime("evalScala") {
-        Eval("import mimir.MimirVizier.vizierdb\n"+source) : String
+        registerNameMappings(inputs)
+        Eval("import mimir.MimirVizier.VizierDB\n"+source) : String
       }
       logger.debug(s"evalScala Took: ${timeRes._2}")
       CodeEvalResponse(timeRes._1,"")
@@ -196,51 +199,112 @@ object MimirVizier extends LazyLogging {
   }
   
   
-  def evalR(source : String) : CodeEvalResponse = {
+  def evalR(inputs: Map[String,String], source : String) : CodeEvalResponse = {
     try {
       val timeRes = logTime("evalR") {
-        val datasetMatch = """vizierdb\$getDataset\(\w*"([a-zA-Z0-9_-]+)"\w*\)""".r 
+        registerNameMappings(inputs)
+        //ds <- vizierdb$getDataset("causes")
+        val datasetMatch = """.*vizierdb\$getDataset\(\s*"([a-zA-Z0-9_]+)"\s*\).*""".r 
         val (tmpNames, dsNames) = source.
         split("\n").toSeq
         .zipWithIndex
         .flatMap(line => 
           line._1 match {
             case datasetMatch(dsName) => {
-              val tmpName = s"temp_view_${source.hashCode()}_${line._2}"
-              db.compiler.compileToSparkWithRewrites(db.table(dsName))
-                .createOrReplaceTempView(tmpName)
-                Some((tmpName, dsName))
-              }
+              val tmpName = s"temp_view_${Math.abs(source.hashCode())}_${line._2}"
+              db.compiler.compileToSparkWithRewrites(db.tempViews.get(ID(dsName)) match {
+                case Some(viewQuery) => viewQuery
+                case None => throw new Exception(s"No such table or view '$dsName'")
+              }).write.parquet(tmpName)//saveAsTable(tmpName)//.createOrReplaceTempView(tmpName)
+              Some((tmpName, dsName))
+            }
             case x => None
         }).unzip
-        val rLibCode = s"""
-        library(SparkR)
-        sparkR.session(master = "${VizierDB.sparkSession.sparkContext.master}", sparkConfig = list(user.dir = "/home/mike/source/mimir", spark.driver.memory = "4g"))
-    
-    
-        tempNames <- c(${tmpNames.mkString(""""""", """", """", """"""")})
-        dsNames <- c(${dsNames.mkString(""""""", """", """", """"""")})
-        dsNameMap <- dict( init_keys=tempNames, initvalues=dsNames )
+        val mapCode = tmpNames match {
+          case Seq() => ""
+          case x => s"""c(${dsNames.mkString(""""""", """", """", """"""")}), c(${tmpNames.mkString(""""""", """", """", """"""")})"""
+        }
         
-        vizierdb <- setRefClass("vizierdb",
-          methods = list(
-            getDataset = function(dsName) {
-              return(sql("SELECT * FROM " + dsNameMap[dsName]))
-            }
-          )
-        )
-        """ + source
-        val R = org.ddahl.rscala.RClient("R",0,true)
+        val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(MimirSpark.get.sparkSession.sparkContext)
+        val hdfsPath = if(ExperimentalOptions.isEnabled("remoteSpark")) s"$hdfsHome/" else ""
+          
+        //sparklyr
+        val rLibCode = s"""
+
+library(sparklyr)
+library(DBI)
+
+# You have to install locally (on the driver where RStudio is running) the same Spark version
+spark_v <- "2.4.4"
+cat("Installing Spark in the directory:", spark_install_dir())
+spark_install(version = spark_v)
+
+config <- spark_config()
+#config${"$"}spark.executor.instances <- 4
+#config${"$"}spark.executor.cores <- 4
+#config${"$"}spark.executor.memory <- "4G"
+config${"$"}spark.submit.deployMode <- "cluster"
+#config${"$"}spark.sql.warehouse.dir <- "${hdfsPath}metastore_db"
+#config${"$"}hive.metastore.warehouse.dir <- "${hdfsPath}metastore_db"
+
+sc <- spark_connect(spark_home = spark_install_find(version=spark_v)${"$"}sparkVersionDir, 
+                    master = "${VizierDB.sparkSession.sparkContext.master}", config=config)
+
+dsNameMap <- hash::hash($mapCode)
+
+VizierDB <- setRefClass("vizierdb",
+  methods = list(
+    getDataset = function(dsName) {
+      return(spark_read_parquet(sc, dsName, toString(dsNameMap[[dsName]])))
+      # initial attempt to use sparksql but it appears that this is not possible
+      #dbGetQuery(sc, "USE mimir")
+      #return(dbGetQuery(sc, paste("SELECT * FROM ", toString(dsNameMap[[dsName]]))))
+    }
+  )
+)
+vizierdb <- VizierDB${"$new()"}
+
+""" + source  + "\n\n"
+
+        //sparkr        
+        /*val rLibCode = s"""
+library(hash)
+library(SparkR)
+sparkR.session(master = "${VizierDB.sparkSession.sparkContext.master}", sparkConfig = list(spark.driver.memory = "4g"))
+
+dsNameMap <- hash::hash($mapCode)
+
+VizierDB <- setRefClass("vizierdb",
+  methods = list(
+    getDataset = function(dsName) {
+      return(sql(paste("SELECT * FROM ", toString(dsName))))
+    }
+  )
+)
+				//attempt to pass vizierdb scala reference - WIP
+vizierdb <- VizierDB${"$new()"}
+""" + 
+        source  + "\n\n"*/
+        /*val rLibCode = s"""
+        library("rscala")
+        s <- scala()
+        vizierdb <- s * 'mimir.VizierDB()'
+""" + 
+        source  + "\n\n"*/
+        /*val referenceMap = new HashMap[Int, (Any,String)]()
+        referenceMap.put(0, (VizierDB, VizierDB.getClass.getName))
+        val R = org.ddahl.rscala.RClient("R",0,true, referenceMap)*/
+        val R = org.ddahl.rscala.RClient("R",0,false, null)
         val ret = R.evalS0(rLibCode)
         R.quit()
         ret
       }
-      logger.debug(s"evalScala Took: ${timeRes._2}")
+      logger.debug(s"evalR Took: ${timeRes._2}")
       CodeEvalResponse(timeRes._1,"")
     } catch {
       case t: Throwable => {
         logger.error(s"Error Evaluating R Source", t)
-        CodeEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
+        CodeEvalResponse("",s"Error Evaluating R Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
       }
     }
   }

@@ -40,6 +40,12 @@ import mimir.algebra._
 import mimir.algebra.function.{SparkFunctions, AggregateRegistry}
 import mimir.{Database, MimirConfig}
 import mimir.util.{ExperimentalOptions, SparkUtils, HadoopUtils}
+import java.net.URL
+import scala.sys.process._
+import java.io.FileInputStream
+import java.nio.file.Paths
+import java.net.InetAddress
+    
 
 object MimirSpark
   extends LazyLogging
@@ -53,6 +59,7 @@ object MimirSpark
   private lazy val s3AEndpoint  = Option(System.getenv("S3A_ENDPOINT"))
   private lazy val envHasS3Keys = !s3AccessKey.isEmpty && !s3SecretKey.isEmpty
   def remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
+  def localSpark = ExperimentalOptions.isEnabled("localSpark")
   var sheetCred: String = null
 
   def get: SQLContext = {
@@ -66,9 +73,10 @@ object MimirSpark
     logger.info(s"Init Spark: dataDir: ${config.dataDirectory()} sparkHost:${config.sparkHost()}, sparkPort:${config.sparkPort()}, hdfsPort:${config.hdfsPort()}, useHDFSHostnames:${config.useHDFSHostnames()}, overwriteStagedFiles:${config.overwriteStagedFiles()}, overwriteJars:${config.overwriteJars()}, numPartitions:${config.numPartitions()}, dataStagingType:${config.dataStagingType()}, sparkJars:${config.sparkJars()}")
 
     sheetCred = config.googleSheetsCredentialPath()
-    val sparkHost = config.sparkHost()
+    var sparkHost = config.sparkHost()
     val sparkPort = config.sparkPort()
-
+    val hdfsPort = config.hdfsPort()
+      
     val conf = if(remoteSpark){
       new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")
         .set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
@@ -91,8 +99,26 @@ object MimirSpark
         .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=${config.dataDirectory()}")
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
     }
+    else if(!localSpark){
+      installAndRunSpark(config)
+      sparkHost = InetAddress.getLocalHost.getHostAddress
+      new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")
+        .set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
+        .set("spark.submit.deployMode","cluster")
+        .setAppName("Mimir")
+        .set("spark.driver.cores","4")
+        .set("spark.driver.memory",  config.sparkDriverMem())
+        .set("spark.executor.memory", "4g")
+        .set("spark.executor.instances", "1")
+        .set("spark.executor.cores", "5")
+        .set("spark.sql.catalogImplementation", "hive")
+        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .set("spark.kryoserializer.buffer.max", "1536m")
+        .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=${config.dataDirectory()}")
+        .registerKryoClasses(SparkUtils.getSparkKryoClasses())
+    }
     else{
-      new SparkConf().setMaster("local[*]")
+      new SparkConf().setMaster("local[*]")//"local-cluster[2,4,4096]")
         .setAppName("Mimir")
         .set("spark.sql.catalogImplementation", "hive")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -102,19 +128,23 @@ object MimirSpark
     }
 
     val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
+    //val excnt = sparkCtx.statusTracker.getExecutorInfos.length
+    //sparkCtx.getConf.set("spark.executor.instances", s"${excnt-1}")
     val dmode = sparkCtx.deployMode
 
-    if(remoteSpark){ 
-      val hdfsPort = config.hdfsPort()
+    if(remoteSpark || !localSpark){ 
       val credentialName = new File(sheetCred).getName
-      sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",  config.useHDFSHostnames.toString())
-      sparkCtx.hadoopConfiguration.set("dfs.datanode.use.datanode.hostname",config.useHDFSHostnames.toString())
-      sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
-      sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
+      if(remoteSpark){
+        sparkCtx.hadoopConfiguration.set("dfs.client.use.datanode.hostname",  config.useHDFSHostnames.toString())
+        sparkCtx.hadoopConfiguration.set("dfs.datanode.use.datanode.hostname",config.useHDFSHostnames.toString())
+        sparkCtx.hadoopConfiguration.set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
+        sparkCtx.hadoopConfiguration.set("fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
+      }
       val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
+      val hdfsPath = if(remoteSpark) s"$hdfsHome/" else ""
       val overwriteJars = config.overwriteJars()
-      sparkCtx.hadoopConfiguration.set("spark.sql.warehouse.dir",s"${hdfsHome}/metastore_db")
-      sparkCtx.hadoopConfiguration.set("hive.metastore.warehouse.dir",s"${hdfsHome}/metastore_db")
+      sparkCtx.hadoopConfiguration.set("spark.sql.warehouse.dir",s"${hdfsPath}metastore_db")
+      sparkCtx.hadoopConfiguration.set("hive.metastore.warehouse.dir",s"${hdfsPath}metastore_db")
       HadoopUtils.writeToHDFS(sparkCtx, "mimir-core_2.11-0.3-SNAPSHOT.jar", new File(s"${System.getProperty("user.home")}/.m2/repository/info/mimirdb/mimir-core_2.11/0.3-SNAPSHOT/mimir-core_2.11-0.3-SNAPSHOT.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-slf4j_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-api_2.11/jars/scala-logging-api_2.11-2.1.2.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-api_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-slf4j_2.11/jars/scala-logging-slf4j_2.11-2.1.2.jar"), overwriteJars)
@@ -132,26 +162,27 @@ object MimirSpark
       //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
       
+      
       //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
-      sparkCtx.addJar(s"$hdfsHome/mimir-core_2.11-0.3-SNAPSHOT.jar")
-      sparkCtx.addJar(s"$hdfsHome/scala-logging-slf4j_2.11-2.1.2.jar")                                                         
-      sparkCtx.addJar(s"$hdfsHome/scala-logging-api_2.11-2.1.2.jar")       
-      sparkCtx.addJar(s"$hdfsHome/play-json_2.11-2.5.0-M2.jar")  
-      sparkCtx.addJar(s"$hdfsHome/play-functional_2.11-2.5.0-M2.jar")  
-      sparkCtx.addJar(s"$hdfsHome/jsr-275-0.9.1.jar")                                     
-      sparkCtx.addJar(s"$hdfsHome/postgresql-9.4-1201-jdbc41.jar")
-      sparkCtx.addJar(s"$hdfsHome/sqlite-jdbc-3.16.1.jar")
-      sparkCtx.addJar(s"$hdfsHome/spark-xml_2.11-0.5.0.jar")
-      sparkCtx.addJar(s"$hdfsHome/spark-excel_2.11-0.11.0.jar")
-      sparkCtx.addJar(s"$hdfsHome/spark-google-spreadsheets_2.11-0.6.1.jar")
-      sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-1.5.jar")
-      sparkCtx.addJar(s"$hdfsHome/fastparse_2.11-2.1.0.jar")
-      sparkCtx.addFile(s"$hdfsHome/$credentialName")
+      sparkCtx.addJar(s"${hdfsPath}mimir-core_2.11-0.3-SNAPSHOT.jar")
+      sparkCtx.addJar(s"${hdfsPath}scala-logging-slf4j_2.11-2.1.2.jar")                                                         
+      sparkCtx.addJar(s"${hdfsPath}scala-logging-api_2.11-2.1.2.jar")       
+      sparkCtx.addJar(s"${hdfsPath}play-json_2.11-2.5.0-M2.jar")  
+      sparkCtx.addJar(s"${hdfsPath}play-functional_2.11-2.5.0-M2.jar")  
+      sparkCtx.addJar(s"${hdfsPath}jsr-275-0.9.1.jar")                                     
+      sparkCtx.addJar(s"${hdfsPath}postgresql-9.4-1201-jdbc41.jar")
+      sparkCtx.addJar(s"${hdfsPath}sqlite-jdbc-3.16.1.jar")
+      sparkCtx.addJar(s"${hdfsPath}spark-xml_2.11-0.5.0.jar")
+      sparkCtx.addJar(s"${hdfsPath}spark-excel_2.11-0.11.0.jar")
+      sparkCtx.addJar(s"${hdfsPath}spark-google-spreadsheets_2.11-0.6.1.jar")
+      sparkCtx.addJar(s"${hdfsPath}sparsity_2.11-1.5.jar")
+      sparkCtx.addJar(s"${hdfsPath}fastparse_2.11-2.1.0.jar")
+      sparkCtx.addFile(s"${hdfsPath}$credentialName")
       
       FileUtils.getListOfFiles(config.sparkJars()).map(file => {
         if(file.getName.endsWith(".jar")){
           HadoopUtils.writeToHDFS(sparkCtx, file.getName, file, overwriteJars)
-          sparkCtx.addJar(s"$hdfsHome/${file.getName}")
+          sparkCtx.addJar(s"${hdfsPath}${file.getName}")
         }
       })
     }
@@ -296,4 +327,41 @@ object MimirSpark
         ar.register(ID(sa._1), sa._2,sa._3)
        })    
   }
+  
+  def installAndRunSpark(config: MimirConfig) = {
+    val dataDir = config.dataDirectory()
+    val sparkDir = s"$dataDir/spark"
+    val sparkDirF = new File(sparkDir)
+    val dataDirF = new File(dataDir)
+    if(!sparkDirF.exists()){
+      sparkDirF.mkdirs()
+      val sparkTarStream = new URL("https://www-us.apache.org/dist/spark/spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz").openStream();
+      FileUtils.untar(sparkTarStream, sparkDir)
+      //new URL("https://www-us.apache.org/dist/spark/spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz") #> new File(s"$sparkDir/spark-2.4.4-bin-hadoop2.7.tgz") !!
+      //FileUtils.untar(new FileInputStream(s"$sparkDir/spark-2.4.4-bin-hadoop2.7.tgz"), sparkDir)
+      val sbinFiles = listOfFiles(s"$sparkDir/spark-2.4.4-bin-hadoop2.7/sbin")
+      sbinFiles.map(_.setExecutable(true))
+      val binFiles = listOfFiles(s"$sparkDir/spark-2.4.4-bin-hadoop2.7/bin")
+      binFiles.map(_.setExecutable(true))
+      
+    }
+    val localIpAddress: String = InetAddress.getLocalHost.getHostAddress
+    val sparkMasterProcess = Process(
+      s"$sparkDir/spark-2.4.4-bin-hadoop2.7/sbin/start-master.sh",
+      cwd = dataDirF,
+      extraEnv = ("SPARK_MASTER_HOST", localIpAddress), ("SPARK_MASTER_PORT", s"${config.sparkPort()}")).!
+      
+    val sparkSlaveProcess = Process(
+      Seq(s"$sparkDir/spark-2.4.4-bin-hadoop2.7/sbin/start-slave.sh", s"$localIpAddress:${config.sparkPort()}"),
+      cwd = dataDirF,
+      extraEnv = ("SPARK_MASTER_HOST", localIpAddress), ("SPARK_WORKER_INSTANCES", "2")).!
+     
+  }
+  private def listOfFiles(path : String) : List[File] = {
+        val paths = Paths.get(path)
+        val file = paths.toFile
+        if(file.isDirectory){
+            file.listFiles().toList
+        }else List[File]() 
+    }
 }
