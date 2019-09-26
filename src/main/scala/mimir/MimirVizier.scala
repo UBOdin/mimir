@@ -76,6 +76,11 @@ object MimirVizier extends LazyLogging {
     // For Vizier specifically, we want Derby/Hive support enabled
     ExperimentalOptions.enable("USE-DERBY")
     
+    val dataDir = new java.io.File(conf.dataDirectory())
+    if(!dataDir.exists())
+      dataDir.mkdirs()
+   
+    
     // Set up the database connection(s)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)
@@ -180,10 +185,11 @@ object MimirVizier extends LazyLogging {
   //Mimir API impls
   ///////////////////////////////////////////////
   var apiCallThread : Thread = null
-  def evalScala(source : String) : CodeEvalResponse = {
+  def evalScala(inputs:Map[String, String], source : String) : CodeEvalResponse = {
     try {
       val timeRes = logTime("evalScala") {
-        Eval("import mimir.MimirVizier.vizierdb\n"+source) : String
+        registerNameMappings(inputs)
+        Eval("import mimir.MimirVizier.VizierDB\n"+source) : String
       }
       logger.debug(s"evalScala Took: ${timeRes._2}")
       CodeEvalResponse(timeRes._1,"")
@@ -214,21 +220,7 @@ object MimirVizier extends LazyLogging {
             case x => None
         }).unzip
         val rLibCode = s"""
-        library(SparkR)
-        sparkR.session(master = "${VizierDB.sparkSession.sparkContext.master}", sparkConfig = list(user.dir = "/home/mike/source/mimir", spark.driver.memory = "4g"))
-    
-    
-        tempNames <- c(${tmpNames.mkString(""""""", """", """", """"""")})
-        dsNames <- c(${dsNames.mkString(""""""", """", """", """"""")})
-        dsNameMap <- dict( init_keys=tempNames, initvalues=dsNames )
-        
-        vizierdb <- setRefClass("vizierdb",
-          methods = list(
-            getDataset = function(dsName) {
-              return(sql("SELECT * FROM " + dsNameMap[dsName]))
-            }
-          )
-        )
+        print("mimir lib code")
         """ + source
         val R = org.ddahl.rscala.RClient("R",0,true)
         val ret = R.evalS0(rLibCode)

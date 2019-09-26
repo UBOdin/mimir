@@ -68,7 +68,7 @@ object MimirSpark
     sheetCred = config.googleSheetsCredentialPath()
     val sparkHost = config.sparkHost()
     val sparkPort = config.sparkPort()
-
+      
     val conf = if(remoteSpark){
       new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")
         .set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
@@ -92,12 +92,14 @@ object MimirSpark
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
     }
     else{
+      val dataDir = config.dataDirectory()
       new SparkConf().setMaster("local[*]")
         .setAppName("Mimir")
         .set("spark.sql.catalogImplementation", "hive")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        // .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
-        // .set("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
+        .set("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .set("spark.hadoop.javax.jdo.option.ConnectionURL", s"jdbc:derby:;databaseName=${new File(dataDir).getAbsolutePath}/metastore_db;create=true")
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
     }
 

@@ -13,13 +13,14 @@ object Request {
 
 case class CodeEvalRequest (
             /* scala source code to evaluate*/
+                  input: Map[String,String],
                   language: String,
                   source: String
 ) extends Request {
   def handle(os:OutputStream) = {
     language match {
       case "R" => os.write(Json.stringify(Json.toJson(MimirVizier.evalR(source))).getBytes )
-      case "scala" => os.write(Json.stringify(Json.toJson(MimirVizier.evalScala(source))).getBytes )
+      case "scala" => os.write(Json.stringify(Json.toJson(MimirVizier.evalScala(input, source))).getBytes )
     }
     
   }
