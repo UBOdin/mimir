@@ -78,6 +78,11 @@ object MimirVizier extends LazyLogging {
     // For Vizier specifically, we want Derby/Hive support enabled
     ExperimentalOptions.enable("USE-DERBY")
     
+    val dataDir = new java.io.File(conf.dataDirectory())
+    if(!dataDir.exists())
+      dataDir.mkdirs()
+   
+    
     // Set up the database connection(s)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)

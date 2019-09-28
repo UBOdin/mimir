@@ -118,12 +118,14 @@ object MimirSpark
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
     }
     else{
-      new SparkConf().setMaster("local[*]")//"local-cluster[2,4,4096]")
+      val dataDir = config.dataDirectory()
+      new SparkConf().setMaster("local[*]")
         .setAppName("Mimir")
         .set("spark.sql.catalogImplementation", "hive")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        // .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
-        // .set("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
+        .set("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .set("spark.hadoop.javax.jdo.option.ConnectionURL", s"jdbc:derby:;databaseName=${new File(dataDir).getAbsolutePath}/metastore_db;create=true")
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
     }
 
@@ -161,7 +163,6 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
-      
       
       //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
       sparkCtx.addJar(s"${hdfsPath}mimir-core_2.11-0.3-SNAPSHOT.jar")
