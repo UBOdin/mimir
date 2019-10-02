@@ -8,9 +8,9 @@ import scala.collection.JavaConversions._
 import scala.util._
 import scala.util.Random
 
-import com.typesafe.scalalogging.slf4j.Logger
+import com.typesafe.scalalogging.Logger
 import org.joda.time.{DateTime, Seconds, Days, Period}
-import com.typesafe.scalalogging.slf4j.Logger
+import com.typesafe.scalalogging.Logger
 
 import mimir.algebra._
 import mimir.ctables._

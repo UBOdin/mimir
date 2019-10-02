@@ -37,7 +37,7 @@ import com.univocity.parsers.common.processor.RowListProcessor
 import com.univocity.parsers.common.RetryableErrorHandler
 import com.univocity.parsers.common.ParsingContext
 import com.univocity.parsers.common.DataProcessingException
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 class DefaultSource extends DataSourceV2 with ReadSupport {
 

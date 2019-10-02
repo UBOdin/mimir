@@ -1,7 +1,7 @@
 package mimir.ctables;
  
 import java.util.Random;
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import mimir._
 import mimir.algebra._

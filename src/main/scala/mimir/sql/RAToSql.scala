@@ -9,7 +9,7 @@ import mimir.provenance._
 import mimir.optimizer.operator.{InlineProjections, PushdownSelections}
 import mimir.util.SqlUtils
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import sparsity.statement.Statement
 import sparsity.Name

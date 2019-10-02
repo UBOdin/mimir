@@ -25,7 +25,7 @@ import scala.util.control.NonFatal
 
 import com.univocity.parsers.csv.CsvParser
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.{BadRecordException, DateTimeUtils}

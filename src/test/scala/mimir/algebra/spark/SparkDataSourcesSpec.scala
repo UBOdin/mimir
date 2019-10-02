@@ -143,7 +143,7 @@ object SparkDataSourcesSpec
   				  WITH MISSING_VALUE('TIMESTAMP','JOBTITLE','YEARSEXPERIENCE','STARTYEAR','STARTWAGE','ENDYEAR','ENDWAGE','NEARESTLARGECITY','STATE','COMPANYSIZE','EMPLOYMENTTYPE','GENDER','WAGEPERIOD')
   			""")
         
-        val gsheet = SparkSpreadsheetService("vizier@api-project-378720062738.iam.gserviceaccount.com", 
+        val gsheet = SparkSpreadsheetService(Some("vizier@api-project-378720062738.iam.gserviceaccount.com"), 
                     new File(MimirSpark.sheetCred))
                       .findSpreadsheet("1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU")
         gsheet.deleteWorksheet("Sheet2")

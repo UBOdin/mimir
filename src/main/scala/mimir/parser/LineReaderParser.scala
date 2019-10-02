@@ -4,7 +4,7 @@ import java.io.{Reader,File}
 import scala.collection.mutable.Buffer
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.jline.reader.{LineReader,LineReaderBuilder,EndOfFileException,UserInterruptException}
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import fastparse.Parsed
 import mimir.util.LineReaderInputSource
 

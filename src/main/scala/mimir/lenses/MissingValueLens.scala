@@ -13,7 +13,7 @@ import mimir.parser.ExpressionParser
 
 import scala.collection.JavaConversions._
 import scala.util._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 
 object MissingValueLens extends LazyLogging {

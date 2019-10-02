@@ -14,7 +14,7 @@ import scala.reflect.runtime.currentMirror
 import org.rogach.scallop._
 import org.slf4j.{LoggerFactory}
 import ch.qos.logback.classic.{Level, Logger}
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import sparsity.Name
 import sparsity.statement.CreateView
@@ -234,7 +234,7 @@ object MimirVizier extends LazyLogging {
         val hdfsPath = if(ExperimentalOptions.isEnabled("remoteSpark")) s"$hdfsHome/" else ""
           
         //sparklyr
-        val rLibCode = s"""
+/*        val rLibCode = s"""
 
 library(sparklyr)
 library(DBI)
@@ -269,8 +269,8 @@ VizierDB <- setRefClass("vizierdb",
 )
 vizierdb <- VizierDB${"$new()"}
 
-""" + source  + "\n\n"
-
+""" + source  + "\n\n"*/
+          
         //sparkr        
         /*val rLibCode = s"""
 library(hash)
@@ -286,20 +286,22 @@ VizierDB <- setRefClass("vizierdb",
     }
   )
 )
-				//attempt to pass vizierdb scala reference - WIP
+				
 vizierdb <- VizierDB${"$new()"}
 """ + 
         source  + "\n\n"*/
-        /*val rLibCode = s"""
+        
+          //attempt to pass vizierdb scala reference - WIP
+        val rLibCode = s"""
         library("rscala")
         s <- scala()
         vizierdb <- s * 'mimir.VizierDB()'
 """ + 
-        source  + "\n\n"*/
-        /*val referenceMap = new HashMap[Int, (Any,String)]()
-        referenceMap.put(0, (VizierDB, VizierDB.getClass.getName))
-        val R = org.ddahl.rscala.RClient("R",0,true, referenceMap)*/
-        val R = org.ddahl.rscala.RClient("R",0,false, null)
+        source  + "\n\n"
+        //val referenceMap = new HashMap[Int, (Any,String)]()
+        //referenceMap.put(0, (VizierDB, VizierDB.getClass.getName))
+        //val R = org.ddahl.rscala.RClient("R",0,true, referenceMap)
+        val R = org.ddahl.rscala.RClient("R",0,false)
         val ret = R.evalS0(rLibCode)
         R.quit()
         ret

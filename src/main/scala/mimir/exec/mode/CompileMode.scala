@@ -7,7 +7,7 @@ import mimir.ctables._
 import mimir.provenance._
 import mimir.exec._
 import mimir.exec.result._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * Base functionality for different compiler rewrites.

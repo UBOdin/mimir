@@ -7,7 +7,7 @@ import java.net.URL
 import org.jline.terminal.{Terminal,TerminalBuilder}
 import org.slf4j.{LoggerFactory}
 import org.rogach.scallop._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import scala.collection.JavaConverters._
 
 import sparsity._
@@ -433,7 +433,7 @@ object Mimir extends LazyLogging {
         logger.setLevel(level)
         return level.toString
 
-      case logger: com.typesafe.scalalogging.slf4j.Logger =>
+      case logger: com.typesafe.scalalogging.Logger =>
         // SLF4J wraps existing loggers.  Recur to get the real logger 
         return internalSetLogLevel(logger.underlying, levelString)
 
@@ -495,6 +495,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
     opt[String]("sparkJars", descr = "Folder with additional jars for spark to load",
     default = Some(dataDirectory() + "/sparkJars"))
   }
+  verify()
 }
 
 class SlashCommandDefinition(

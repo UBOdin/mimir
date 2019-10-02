@@ -1,7 +1,7 @@
 package mimir.models
 
 import scala.util.Random
-import com.typesafe.scalalogging.slf4j.Logger
+import com.typesafe.scalalogging.Logger
 
 import mimir.Database
 import mimir.algebra._

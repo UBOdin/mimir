@@ -1,7 +1,7 @@
 package mimir.adaptive
 
 import java.io._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 

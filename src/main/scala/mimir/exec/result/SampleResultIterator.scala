@@ -1,6 +1,6 @@
 package mimir.exec.result
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import mimir.algebra._
 import mimir.exec.mode.{WorldBits,TupleBundle}

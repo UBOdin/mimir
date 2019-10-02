@@ -18,7 +18,7 @@ import org.eclipse.jetty.server.Handler
 import org.eclipse.jetty.webapp.WebAppContext
 import java.sql.SQLException
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 import play.api.libs.json._

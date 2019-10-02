@@ -1,6 +1,6 @@
 package mimir.optimizer
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import com.github.nscala_time.time.Imports._
 import mimir.algebra._
 import mimir.util._

@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.expressions.{
   Literal
 }
 import org.apache.spark.{SparkContext, SparkConf}
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import java.io.File
 import mimir.util.FileUtils
 
@@ -99,7 +99,7 @@ object MimirSpark
         .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=${config.dataDirectory()}")
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
     }
-    else if(!localSpark){
+    else if(localSpark){
       installAndRunSpark(config)
       sparkHost = InetAddress.getLocalHost.getHostAddress
       new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")

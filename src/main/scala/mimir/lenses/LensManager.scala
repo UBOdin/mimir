@@ -9,7 +9,7 @@ import mimir.sql._
 import mimir.models._
 import mimir.util.JDBCUtils
 import mimir.util.ExperimentalOptions
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 class LensManager(db: Database) extends LazyLogging {
 

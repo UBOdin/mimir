@@ -1,6 +1,6 @@
 package mimir.data
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import java.sql.SQLException
 import sparsity.Name
 import play.api.libs.json._

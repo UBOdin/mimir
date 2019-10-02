@@ -1,6 +1,6 @@
 package mimir.exec.mode
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.exec._

@@ -10,7 +10,7 @@ import mimir.data.SystemCatalog
 import mimir.serialization._
 import mimir.util._
 import mimir.metadata._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 class AdaptiveSchemaManager(db: Database)
   extends LazyLogging

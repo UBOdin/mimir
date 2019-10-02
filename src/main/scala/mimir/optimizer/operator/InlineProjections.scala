@@ -1,7 +1,7 @@
 package mimir.optimizer.operator
 
 import java.sql._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import mimir.algebra._
 import mimir.ctables._

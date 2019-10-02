@@ -9,7 +9,7 @@ import mimir.views._
 import mimir.models.Model
 import mimir.exec.result.ResultIterator
 import mimir.exec.uncertainty.{Statistic, Confidence, ColumnStatistic}
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 
 class StatsQuery(

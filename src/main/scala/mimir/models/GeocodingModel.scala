@@ -7,7 +7,7 @@ import mimir.util._
 import mimir.Database
 import play.api.libs.json.JsObject
 import play.api.libs.json.JsArray
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * A model representing a key-repair choice.

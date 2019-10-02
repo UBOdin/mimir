@@ -40,7 +40,7 @@ import mimir.algebra._
 import mimir.ctables.OperatorDeterminism
 import mimir.util._
 import org.joda.time.LocalDate
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import scala.collection.JavaConversions._
 import scala.collection.{immutable, mutable}
