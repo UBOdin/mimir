@@ -132,9 +132,9 @@ resolvers += Resolver.mavenLocal
 
 updateOptions := updateOptions.value.withGigahorse(false)
 
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.6.7"
-dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.6.7"
-dependencyOverrides += "com.fasterxml.jackson.module" % "jackson-module-scala_2.11" % "2.6.7"
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.9.10"
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.10"
+dependencyOverrides += "com.fasterxml.jackson.module" % "jackson-module-scala_2.12" % "2.9.10"
 
 
 libraryDependencies ++= Seq(
@@ -145,8 +145,8 @@ libraryDependencies ++= Seq(
   "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
-  //"com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",
-  "com.typesafe.scala-logging" 	  %%  "scala-logging" 			 % "3.9.0",
+  //"com.typesafe.scala-logging"  %%  "scala-logging-slf4j"      % "2.1.2",
+  "com.typesafe.scala-logging"    %%  "scala-logging"            % "3.9.0",
   "ch.qos.logback"                %   "logback-classic"          % "1.2.3",
   "org.specs2"                    %%  "specs2-core"              % "4.3.5" % "test",
   "org.specs2"                    %%  "specs2-matcher-extra"     % "4.3.5" % "test",
@@ -181,11 +181,11 @@ libraryDependencies ++= Seq(
   //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark"         %   "spark-sql_2.12"          % "2.4.4" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark"         %   "spark-mllib_2.12"         % "2.4.4" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark"         %   "spark-hive_2.12"        % "2.4.4" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.databricks"           %   "spark-xml_2.12"            % "0.5.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.crealytics"           %%  "spark-excel"          % "0.12.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-sql_2.12"          % "2.4.4",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-mllib_2.12"         % "2.4.4",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-hive_2.12"        % "2.4.4",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.databricks"           %   "spark-xml_2.12"            % "0.5.0",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.crealytics"           %%  "spark-excel"          % "0.12.0",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "com.github.potix2"        %%  "spark-google-spreadsheets" % "0.6.4",
   "org.apache.hadoop"        %   "hadoop-client"          % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
   "org.apache.hadoop"        %   "hadoop-aws"             % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
