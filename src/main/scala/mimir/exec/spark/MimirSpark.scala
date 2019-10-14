@@ -113,9 +113,9 @@ object MimirSpark
         .appName("Mimir")
         .config("spark.driver.cores","4")
         .config("spark.driver.memory",  config.sparkDriverMem())
-        .config("spark.executor.memory", "4g")
+        .config("spark.executor.memory", "8g")
         .config("spark.executor.instances", "1")
-        .config("spark.executor.cores", "5")
+        //.config("spark.executor.cores", "5")
         .config("spark.sql.catalogImplementation", "hive")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .config("spark.kryoserializer.buffer.max", "1536m")
@@ -140,7 +140,7 @@ object MimirSpark
       val credentialName = new File(sheetCred).getName
       val hdfsHome = HadoopUtils.getHomeDirectoryHDFS(sparkCtx)
       val hdfsPath = if(remoteSpark) s"$hdfsHome/" else ""
-      val overwriteJars = true//config.overwriteJars()
+      val overwriteJars = false//config.overwriteJars()
       //sparkCtx.hadoopConfiguration.set("spark.sql.warehouse.dir",s"${hdfsPath}metastore_db")
       //sparkCtx.hadoopConfiguration.set("hive.metastore.warehouse.dir",s"${hdfsPath}metastore_db")
       HadoopUtils.writeToHDFS(sparkCtx, s"mimir-core_${scalaVersion}-0.3.jar", new File(getJarPath("info.mimirdb", "mimir-core", "0.3", scalaVersion)), overwriteJars)
@@ -362,7 +362,8 @@ object MimirSpark
     val sparkVerDirF = new File(s"${sparkDir}/${sparkVersion}")
     if(!sparkVerDirF.exists()){
       sparkDirF.mkdirs()
-      val sparkTarStream = new URL(s"https://www-us.apache.org/dist/spark/spark-2.4.4/${sparkVersion}.tgz").openStream();
+      //dist url would be: s"https://www-us.apache.org/dist/spark/spark-2.4.4/${sparkVersion}.tgz"
+      val sparkTarStream = new URL(s"https://vizierdb.info/${sparkVersion}.tgz").openStream();
       FileUtils.untar(sparkTarStream, sparkDir)
       //new URL("https://www-us.apache.org/dist/spark/spark-2.4.4/${sparkVersion}.tgz") #> new File(s"$sparkDir/${sparkVersion}.tgz") !!
       //FileUtils.untar(new FileInputStream(s"$sparkDir/${sparkVersion}.tgz"), sparkDir)
@@ -380,7 +381,7 @@ object MimirSpark
     val sparkSlaveProcess = Process(
       Seq(s"$sparkDir/${sparkVersion}/sbin/start-slave.sh", s"$localIpAddress:${config.sparkPort()}"),
       cwd = dataDirF,
-      extraEnv = ("SPARK_MASTER_HOST", localIpAddress), ("SPARK_WORKER_INSTANCES", "2")).!
+      extraEnv = ("SPARK_MASTER_HOST", localIpAddress), ("SPARK_WORKER_INSTANCES", "3")).!
      
   }
   private def listOfFiles(path : String) : List[File] = {

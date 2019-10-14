@@ -109,10 +109,12 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
   private def train(df:DataFrame) =
   {
     import sparkSql.implicits._
-    df.limit(TypeInferenceModel.sampleLimit)
+    val aggdf = df.limit(TypeInferenceModel.sampleLimit)
       .select(columns.map{_.id}.map{col(_)}:_*)
       .agg(new VoteList().toColumn)
-      .head()
+    if(aggdf.isEmpty)
+      throw new Exception("Can not train TypeInferenceModel on an empty dataset.")
+    else aggdf.head()
       .asInstanceOf[Row].toSeq(0).asInstanceOf[Seq[Row]]
       .map(el => (el.getLong(0), el.getMap[Int,Row](1).toMap) )
       .map(el => (el._1, el._2.map(sel => (sel._1 -> (sel._2.getLong(0), sel._2.getDouble(1))))))
