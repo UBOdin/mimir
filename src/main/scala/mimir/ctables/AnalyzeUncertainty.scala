@@ -105,11 +105,10 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 										args.length
 									)
 							}.unzip
-					val allSingleReasonLookups =
+					val allSingleReasonLookups: Seq[String] =
 						multipleReasons
-							.map { _.argLookup }
-							.collect { case SingleArgLookup(message) => message }
-							.flatten
+							.map { reason => (reason.lens, reason.argLookup) }
+							.collect { case (lens, SingleArgLookup(message)) => message }
 							.toSet.toSeq
 					logger.debug(s" ... ${allSingleReasonLookups.mkString("\n ... ")}")
 					logger.debug(s" ... ${allMultiReasonLookups.mkString("\n ... ")}")
@@ -117,41 +116,35 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 					// with how we use VGTerms throughout and that two identical VGTerms should have
 					// identical ARG schemas. 
 					// -Oliver
-					if(!allMultiReasonLookups.isEmpty){
-						val singleReasonLookupsQuery: Option[Operator] = 
-							if(allSingleReasonLookups.isEmpty){ None }
-							else { 
-								Some(HardTable(
-									Seq( ID("MESSAGE") -> TString() ),
-									allSingleReasonLookups.map { StringPrimitive(_) }.map { Seq(_) }
-								))
-							}
-						val jointQuery = 
-							OperatorUtils.makeUnion(
-								allMultiReasonLookups 
-									++ singleReasonLookupsQuery
-							)
-						val argSize = allMultiReasonCounts.head
-
-						if(!allMultiReasonCounts.forall { _ == argSize }){
-							throw new RuntimeException(
-								s"Error while merging ReasonSets for ${multipleReasons.head.lens}: Mismatched Arg Counts: $allMultiReasonCounts"
-							)
+					val singleReasonLookupsQuery: Option[Operator] = 
+						if(allSingleReasonLookups.isEmpty){ None }
+						else { 
+							Some(HardTable(
+								Seq( ID("MESSAGE") -> TString() ),
+								allSingleReasonLookups.map { StringPrimitive(_) }
+																			.map { Seq(_) }
+							))
 						}
-						new ReasonSet(
-							multipleReasons.head.lens,
-							MultipleArgLookup(
-								jointQuery, 
-								(0 until argSize).map { i => Var(ID("ARG_"+i)) },
-								Var(ID("MESSAGE"))
-							)
+					val jointQuery = 
+						OperatorUtils.makeUnion(
+							allMultiReasonLookups 
+								++ singleReasonLookupsQuery
 						)
-					} else { // only SingleReasonArgs
-						new ReasonSet(
-							multipleReasons.head.lens,
-							SingleArgLookup(allSingleReasonLookups)
+					val argSize = allMultiReasonCounts.head
+
+					if(!allMultiReasonCounts.forall { _ == argSize }){
+						throw new RuntimeException(
+							s"Error while merging ReasonSets for ${multipleReasons.head.lens}: Mismatched Arg Counts: $allMultiReasonCounts"
 						)
 					}
+					new ReasonSet(
+						multipleReasons.head.lens,
+						MultipleArgLookup(
+							jointQuery, 
+							(0 until argSize).map { i => Var(ID("ARG_"+i)) },
+							Var(ID("MESSAGE"))
+						)
+					)
 				}
 			}.toSeq
 	}
@@ -240,13 +233,14 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 				logger.debug(s"Explain Adaptive View Source 1: Recursion into $tableNameString")
 				val sourceReasons = recur(query)
 					
-				val (lensReasons) = if(wantSchema){
-					db.lenses.warningsFor(schema, table, wantCols)
-				} else (Seq())
+				val lensReasons: Seq[ReasonSet] = if(wantSchema){
+						db.lenses.warningsFor(schema, table, wantCol.toSeq)
+						         .map { _.asReasonSet }
+					} else (Seq())
 				logger.debug(s"Explain Adaptive View Done: $tableNameString")
 				// alternative: Use SYS_ATTRS directly
 				//    db.table("SYS_TABLES").where( Var("SCHEMA").eq(StringPrimitive(model)).and( Var("TABLE").eq(StringPrimitive(name)) ).and( Var("ATTR").in(wantCol.map(StringPrimitive(_))) ) )
-				sourceReasons ++ tableReasons ++ attrReasons ++
+				sourceReasons ++ lensReasons ++
 					explainTableCoarseGrained(trueSchema, table)
 			}
 

@@ -18,7 +18,7 @@ case class MultipleArgLookup(
   val message: Expression
 ) extends ArgLookup
 case class SingleArgLookup(
-  val message: Seq[String]
+  val message: String
 ) extends ArgLookup
 
 object ArgLookup
@@ -57,7 +57,6 @@ case class ReasonSet(
           query.count( alias = "COUNT" ), 
           UnannotatedBestGuess
         ) { _.next.tuple(0).asLong <= 0 }
-      case SingleArgLookup(Seq()) => true
       case SingleArgLookup(_) => false
     }    
   }
@@ -79,7 +78,7 @@ case class ReasonSet(
   def allArgs(db: Database, limit: Option[Int], offset: Option[Int]): Iterable[(Seq[PrimitiveValue], String)] =
   {
     argLookup match {
-      case SingleArgLookup(messages) => messages.map { (Seq(), _) }
+      case SingleArgLookup(_) => Seq()
       case MultipleArgLookup(baseQuery, argExprs, messageExpr) => {
 
         val limitedQuery = 
@@ -175,7 +174,7 @@ object ReasonSet
           lens,
           if(keyExprs.isEmpty 
               && ExpressionUtils.getColumns(messageExpr).isEmpty)
-                { SingleArgLookup(Seq(db.interpreter.evalString(messageExpr))) }
+                { SingleArgLookup(db.interpreter.evalString(messageExpr)) }
           else  { MultipleArgLookup(input, keyExprs, messageExpr) }
         )
       }

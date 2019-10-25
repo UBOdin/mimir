@@ -64,7 +64,10 @@ trait MonoLens extends Lens
   ): Operator
 
   /**
-   * Generate the operator implementation of this lens
+   * Return data-independent warnings associated with the specified lens.  
+   * Note that this method should *NOT* return warnings tied to a Caveat
+   * operator, but rather only warnings arising from the schema, or uncertainty
+   * about how the table view is to be constructed.
    * 
    * @param db           The global database instance
    * @param name         The identity of the specified lens
@@ -160,4 +163,27 @@ trait MultiLens extends Lens
     config: JsValue, 
     friendlyName: String
   ): Option[Operator]
+
+  /**
+   * Return data-independent warnings associated with the specified lens table.  
+   * Note that this method should *NOT* return warnings tied to a Caveat
+   * operator, but rather only warnings arising from the schema, or uncertainty
+   * about how the table view is to be constructed.
+   *
+   * @param db           The global database instance
+   * @param name         The identity of the specified lens
+   * @param table        The table to generate a view for
+   * @param query        The query for the input to this lens
+   * @param config       The user-provided configuration for this lens
+   * @param friendlyName The human-readable name for this lens
+   */
+  def warnings(
+    db: Database, 
+    name: ID, 
+    table: ID,
+    query: Operator, 
+    cols: Seq[ID],
+    config: JsValue, 
+    friendlyName: String
+  ): Seq[Reason]
 }

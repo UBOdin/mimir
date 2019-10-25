@@ -100,6 +100,9 @@ class LensManager(db: Database)
   private def configForDetails(details: Seq[PrimitiveValue]): JsValue =
     Json.parse(details(2).asString)
 
+  private def friendlyNameForDetails(details: Seq[PrimitiveValue]): String =
+    details(3).asString
+
   def retrain(lens: ID)
   {
     val (_, details) = lenses.get(lens)
@@ -165,14 +168,15 @@ class LensManager(db: Database)
     return Seq()
   }
 
-  def get(lens: ID): (Lens, Operator, JsValue) =
+  def get(lens: ID): (Lens, Operator, JsValue, String) =
   {
     val (_, details) = lenses.get(lens)
                              .getOrElse { throw new SQLException(s"Invalid lens $lens") }
     (
       lensForDetails(details), 
       queryForDetails(details),
-      configForDetails(details)
+      configForDetails(details),
+      friendlyNameForDetails(details)
     )
   }
 
@@ -182,13 +186,32 @@ class LensManager(db: Database)
     cols: Seq[ID]
   ): Seq[Reason] =
   {
-    val (lens, query, config) = get(schema.getOrElse { table })
-    lens match {
-      case mono:MonoLens => mono.
-
+    val (lens, query, config, friendlyName) = get(schema.getOrElse { table })
+    (lens, schema) match {
+      case (mono:MonoLens, None) => 
+        mono.warnings(
+          db, 
+          table,
+          query,
+          cols,
+          config,
+          friendlyName
+        )
+      case (multi:MultiLens, Some(schemaName)) => 
+        multi.warnings(
+          db,
+          schemaName,
+          table,
+          query,
+          cols,
+          config,
+          friendlyName
+        )
+      case (_:MonoLens, Some(schemaName)) =>
+        throw new SQLException("Lens $schemaName has no sub-tables.  Use $schemaName instead of $schemaName.$table.")
+      case (_:MultiLens, None) =>
+        throw new SQLException("Lens $table is a schema and you need to specify a table; Use $schemaName.tableName instead of $schemaName.")
     }
-
-    val get(lens)
   }
 
 
@@ -232,7 +255,7 @@ class LensManager(db: Database)
           )
         )
       case multiLens:MultiLens =>
-        throw new SQLException(s"Invalid lens $lens")
+        throw new SQLException(s"Invalid lens ${LensManager.SCHEMA}.$lens")
     }    
   }
 

@@ -38,7 +38,6 @@ class MimirVizierSpec
     val conf = new MimirConfig(args);
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirVizier.db = new Database(new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname()))
-    MimirVizier.db.open()
     // MimirVizier.db.metadata.open()
     // MimirVizier.db.backend.open(MimirVizier.db)
     // val otherExcludeFuncs = Seq("NOT","AND","!","%","&","*","+","-","/","<","<=","<=>","=","==",">",">=","^","|","OR").map { ID(_) }

@@ -25,6 +25,16 @@ case class Reason(
       db.lenses.acknowledge(lens, key)
     }
   }
+
+  def asReasonSet: ReasonSet =
+    if(key.isEmpty) {
+      ReasonSet(lens, SingleArgLookup(message))
+    } else {
+      ReasonSet(lens, MultipleArgLookup(
+        HardTable(Seq(), Seq(Seq())), 
+        key, StringPrimitive(message)
+      ))
+    }
 }
 
 object Reason
