@@ -65,3 +65,7 @@ tpch-dbgen
 /bin/coursier
 /bin/mimir
 *.parquet
+
+STAGETOS3CSV*
+.*.crc
+api-project-*
