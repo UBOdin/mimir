@@ -105,8 +105,7 @@ case class CreateLensRequest (
       MimirVizier.createLens(
         input, 
         params, 
-        `type`, 
-        false, 
+        `type`,  
         materialize, 
         humanReadableName = humanReadableName
       )

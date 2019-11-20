@@ -403,7 +403,6 @@ object MimirVizier extends LazyLogging {
     input : Any, 
     params : java.util.ArrayList[String], 
     _type : String, 
-    make_input_certain:Boolean, 
     materialize:Boolean, 
     humanReadableName: Option[String]
   ) : CreateLensResponse = {
@@ -411,7 +410,6 @@ object MimirVizier extends LazyLogging {
       input              = input, 
       params             = params.toArray[String](Array[String]()).toSeq, 
       _type              = _type, 
-      make_input_certain = make_input_certain, 
       materialize        = materialize,
       humanReadableName  = humanReadableName
     )
@@ -421,7 +419,6 @@ object MimirVizier extends LazyLogging {
     input : Any, 
     params : Seq[String], 
     _type : String, 
-    make_input_certain:Boolean, 
     materialize:Boolean, 
     humanReadableName: Option[String]
   ) : CreateLensResponse = {
@@ -434,7 +431,7 @@ object MimirVizier extends LazyLogging {
       val parsedParams =  // Start by replacing "{{input}}" with the name of the input table.
             params.map(param => 
               mimir.parser.ExpressionParser.expr( param.replaceAll("\\{\\{\\s*input\\s*\\}\\}", input.toString)) )
-      val lensNameBase = (input.toString() + _type + parsedParams.mkString(",") + make_input_certain + materialize).hashCode()
+      val lensNameBase = (input.toString() + _type + parsedParams.mkString(",") + materialize).hashCode()
       val inputQuery = s"SELECT * FROM ${input}"
 
       val lensName = "LENS_" + _type + (lensNameBase.toString().replace("-", ""))
@@ -451,35 +448,8 @@ object MimirVizier extends LazyLogging {
         db.lenses.drop(ID(lensName))
       } else {
         // Need to create the lens if it doesn't already exist.
-
         // query is a var because we might need to rewrite it below.
         var query:Operator = db.catalog.tableOperator(Name(input.toString))
-
-
-        // "Make Certain" was previously implemented by dumping the lens 
-        // contents into a temporary table.  This is... messy.  
-
-        // Oliver @ June 7, 2019: Disabling Make Certain until 
-        // https://github.com/UBOdin/mimir/issues/331 is resolved
-        // and/or we get support for updates back into Mimir.
-
-        // if(make_input_certain){ 
-        //   val materializedInput = ID("MATERIALIZED_"+input)
-        //   val querySchema = db.typechecker.schemaOf(query)
-
-        //   if(db.catalog.tableExists(materializedInput)){
-        //     logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + 
-        //                  materializedInput)
-        //   } else { 
-        //     // TODO: R
-        //     // Dump the query into a table if necessary 
-        //     db.backend.createTable(materializedInput, query)
-        //   }
-
-        //   // And override the default lens input with the table.
-        //   query = db.table(materializedInput)
-        // }
-
         // Regardless of where we're reading from, next we need to run: 
         //   CREATE LENS ${lensName} 
         //            AS $query 
