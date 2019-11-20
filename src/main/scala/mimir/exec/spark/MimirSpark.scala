@@ -155,7 +155,7 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, s"spark-google-spreadsheets_${scalaVersion}-0.6.4.jar", new File(getJarPath("com.github.potix2", "spark-google-spreadsheets", "0.6.4", scalaVersion)), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"sparsity_${scalaVersion}-1.6.jar", new File(getJarPath("info.mimirdb", "sparsity", "1.6", scalaVersion)), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"fastparse_${scalaVersion}-2.1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.lihaoyi/fastparse_${scalaVersion}/jars/fastparse_${scalaVersion}-2.1.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
+      //HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
       
       sparkCtx.addJar(s"${hdfsPath}mimir-core_${scalaVersion}-0.3.jar")
       sparkCtx.addJar(s"${hdfsPath}scala-logging_${scalaVersion}-3.9.0.jar")       
@@ -169,7 +169,7 @@ object MimirSpark
       sparkCtx.addJar(s"${hdfsPath}spark-google-spreadsheets_${scalaVersion}-0.6.4.jar")
       sparkCtx.addJar(s"${hdfsPath}sparsity_${scalaVersion}-1.6.jar")
       sparkCtx.addJar(s"${hdfsPath}fastparse_${scalaVersion}-2.1.0.jar")
-      sparkCtx.addFile(s"${hdfsPath}$credentialName")
+      //sparkCtx.addFile(s"${hdfsPath}$credentialName")
       
       FileUtils.getListOfFiles(config.sparkJars()).map(file => {
         if(file.getName.endsWith(".jar")){

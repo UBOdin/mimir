@@ -106,7 +106,6 @@ case class CreateLensRequest (
         input, 
         params, 
         `type`, 
-        false, 
         materialize, 
         humanReadableName = humanReadableName
       )
