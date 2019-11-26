@@ -213,7 +213,7 @@ case class ExplainCellSchemaRequest (
             /* rowid of cell */
                   row: String,
             /* column of cell */
-                  col: Int
+                  col: String
 ) extends Request {
   def handle(os:OutputStream) = {
     os.write(Json.stringify(Json.toJson(ExplainReasonsResponse(MimirVizier.explainCell(query, col, row).map(rsn => 

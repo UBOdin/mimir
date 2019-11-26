@@ -900,6 +900,8 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     timeRes._1
   }
   
+  def explainCell(query: String, col:String, row:String) : Seq[mimir.ctables.Reason] = explainCell(query, ID(col), row)
+  
   def explainCell(query: String, col:ID, row:String) : Seq[mimir.ctables.Reason] = {
     try{
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;

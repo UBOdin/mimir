@@ -152,10 +152,14 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, s"sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"spark-xml_${scalaVersion}-0.5.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.databricks/spark-xml_${scalaVersion}/jars/spark-xml_${scalaVersion}-0.5.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"spark-excel_${scalaVersion}-0.12.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.crealytics/spark-excel_${scalaVersion}/jars/spark-excel_${scalaVersion}-0.12.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"spark-google-spreadsheets_${scalaVersion}-0.6.4.jar", new File(getJarPath("com.github.potix2", "spark-google-spreadsheets", "0.6.4", scalaVersion)), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-services-sheets-v4-rev18-1.22.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.apis/google-api-services-sheets/jars/google-api-services-sheets-v4-rev18-1.22.0.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-client-1.22.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.api-client/google-api-client/jars/google-api-client-1.22.0.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-client-json-1.2.2-alpha.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.api.client/google-api-client-json/jars/google-api-client-json-1.2.2-alpha.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-client-util-1.2.2-alpha.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.api.client/google-api-client-util/jars/google-api-client-util-1.2.2-alpha.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, s"spark-google-spreadsheets_${scalaVersion}-0.6.4.jar", new File(getJarPath("com.github.potix2", "spark-google-spreadsheets", "0.6.4", scalaVersion)), true)
       HadoopUtils.writeToHDFS(sparkCtx, s"sparsity_${scalaVersion}-1.6.jar", new File(getJarPath("info.mimirdb", "sparsity", "1.6", scalaVersion)), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"fastparse_${scalaVersion}-2.1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.lihaoyi/fastparse_${scalaVersion}/jars/fastparse_${scalaVersion}-2.1.0.jar"), overwriteJars)
-      //HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
       
       sparkCtx.addJar(s"${hdfsPath}mimir-core_${scalaVersion}-0.3.jar")
       sparkCtx.addJar(s"${hdfsPath}scala-logging_${scalaVersion}-3.9.0.jar")       
@@ -166,10 +170,14 @@ object MimirSpark
       sparkCtx.addJar(s"${hdfsPath}sqlite-jdbc-3.16.1.jar")
       sparkCtx.addJar(s"${hdfsPath}spark-xml_${scalaVersion}-0.5.0.jar")
       sparkCtx.addJar(s"${hdfsPath}spark-excel_${scalaVersion}-0.12.0.jar")
+      sparkCtx.addJar(s"${hdfsPath}google-api-services-sheets-v4-rev18-1.22.0.jar")
+      sparkCtx.addJar(s"${hdfsPath}google-api-client-1.22.0.jar")
+      sparkCtx.addJar(s"${hdfsPath}google-api-client-json-1.2.2-alpha.jar")
+      sparkCtx.addJar(s"${hdfsPath}google-api-client-util-1.2.2-alpha.jar")
       sparkCtx.addJar(s"${hdfsPath}spark-google-spreadsheets_${scalaVersion}-0.6.4.jar")
       sparkCtx.addJar(s"${hdfsPath}sparsity_${scalaVersion}-1.6.jar")
       sparkCtx.addJar(s"${hdfsPath}fastparse_${scalaVersion}-2.1.0.jar")
-      //sparkCtx.addFile(s"${hdfsPath}$credentialName")
+      sparkCtx.addFile(s"${hdfsPath}$credentialName")
       
       FileUtils.getListOfFiles(config.sparkJars()).map(file => {
         if(file.getName.endsWith(".jar")){
