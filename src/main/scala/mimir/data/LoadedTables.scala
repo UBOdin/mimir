@@ -234,8 +234,8 @@ class LoadedTables(val db: Database)
     store.put(
       targetTable, Seq(
         StringPrimitive(url),
-        StringPrimitive(format.id),
-        StringPrimitive(Json.stringify(Json.toJson(sparkOptions))),
+        StringPrimitive(storageFormat.id),
+        StringPrimitive(Json.stringify(Json.toJson(finalSparkOptions))),
         StringPrimitive(Json.stringify(new JsObject(mimirOptions)))
       )
     )
@@ -508,9 +508,15 @@ object LoadedTables {
     "mode" -> "DROPMALFORMED", 
     "header" -> "false"
   )
+  
+  private val defaultLoadGoogleSheetOptions = Map(
+      "serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
+      "credentialPath" -> "test/data/api-project-378720062738-5923e0b6125f")
+  
   val defaultLoadOptions = Map[ID, Map[String,String]](
     FileFormat.CSV                    -> defaultLoadCSVOptions,
-    FileFormat.CSV_WITH_ERRORCHECKING -> defaultLoadCSVOptions
+    FileFormat.CSV_WITH_ERRORCHECKING -> defaultLoadCSVOptions,
+    FileFormat.GOOGLE_SHEETS -> defaultLoadGoogleSheetOptions
   )
 
   val usesDatasourceErrors = Set(

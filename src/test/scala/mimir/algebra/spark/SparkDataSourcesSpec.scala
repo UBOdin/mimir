@@ -3,7 +3,7 @@ package mimir.algebra.spark
 import java.io.File
 import java.nio.file.Paths
 import org.specs2.specification.BeforeAll
-import com.github.potix2.spark.google.spreadsheets.SparkSpreadsheetService
+import mimir.exec.spark.datasource.google.spreadsheet.SparkSpreadsheetService
 
 import mimir.algebra._
 import mimir.algebra.NullPrimitive
@@ -143,7 +143,7 @@ object SparkDataSourcesSpec
   				  WITH MISSING_VALUE('TIMESTAMP','JOBTITLE','YEARSEXPERIENCE','STARTYEAR','STARTWAGE','ENDYEAR','ENDWAGE','NEARESTLARGECITY','STATE','COMPANYSIZE','EMPLOYMENTTYPE','GENDER','WAGEPERIOD')
   			""")
         
-        val gsheet = SparkSpreadsheetService("vizier@api-project-378720062738.iam.gserviceaccount.com", 
+        val gsheet = SparkSpreadsheetService(Some("vizier@api-project-378720062738.iam.gserviceaccount.com"), 
                     new File(MimirSpark.sheetCred))
                       .findSpreadsheet("1-9fKx9f1OV-J2P2LtOM33jKfc5tQt4DJExSU3xaXDwU")
         gsheet.deleteWorksheet("Sheet2")
@@ -151,7 +151,7 @@ object SparkDataSourcesSpec
         val result = db.compiler.compileToSparkWithRewrites(db.table("G_MV"))
         MimirSparkRuntimeUtils.writeDataSink(
             result, 
-            "com.github.potix2.spark.google.spreadsheets", 
+            "mimir.exec.spark.datasource.google.spreadsheet", 
             Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
                 "credentialPath" -> MimirSpark.sheetCred), 
             Some(outputFilename)
