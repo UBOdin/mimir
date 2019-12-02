@@ -85,7 +85,6 @@ class MimirVizierSpec
         Seq("BUS_SPEED_MHZ"),
         "MISSING_VALUE",
         false,
-        false,
         Some("MISSING_CPUSPEED_BUS_SPEED_MHZ")
       )
       MimirVizier.db.query(
@@ -100,7 +99,6 @@ class MimirVizierSpec
         "PICK",
         Seq("B"),
         "MISSING_VALUE",
-        false,
         false,
         Some("MISSING_PICK_B")
       )

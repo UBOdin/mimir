@@ -3,7 +3,7 @@ package mimir.algebra.spark
 import java.io.File
 import java.nio.file.Paths
 import org.specs2.specification.BeforeAll
-import com.github.potix2.spark.google.spreadsheets.SparkSpreadsheetService
+import mimir.exec.spark.datasource.google.spreadsheet.SparkSpreadsheetService
 
 import mimir.algebra._
 import mimir.algebra.NullPrimitive
@@ -99,11 +99,7 @@ object SparkDataSourcesSpec
           targetTable = Some(ID("G")), 
           inferTypes = Some(true), 
           detectHeaders = Some(false),
-          format = FileFormat.GOOGLE_SHEETS,
-          sparkOptions = Map(
-            "serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
-            "credentialPath" -> MimirSpark.sheetCred
-          )
+          format = FileFormat.GOOGLE_SHEETS
         ) 
         ok
       }
@@ -151,7 +147,7 @@ object SparkDataSourcesSpec
         val result = db.compiler.compileToSparkWithRewrites(db.table("G_MV"))
         MimirSparkRuntimeUtils.writeDataSink(
             result, 
-            "com.github.potix2.spark.google.spreadsheets", 
+            "mimir.exec.spark.datasource.google.spreadsheet", 
             Map("serviceAccountId" -> "vizier@api-project-378720062738.iam.gserviceaccount.com",
                 "credentialPath" -> MimirSpark.sheetCred), 
             Some(outputFilename)

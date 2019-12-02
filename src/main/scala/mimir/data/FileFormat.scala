@@ -14,6 +14,6 @@ object FileFormat {
   val PARQUET                = ID("parquet")
   val PDF                    = ID("mimir.exec.spark.datasource.pdf")
   val ORC                    = ID("orc")
-  val GOOGLE_SHEETS          = ID("com.github.potix2.spark.google.spreadsheets")
+  val GOOGLE_SHEETS          = ID("mimir.exec.spark.datasource.google.spreadsheet")
   val CSV_WITH_ERRORCHECKING = ID("org.apache.spark.sql.execution.datasources.ubodin.csv")
 }

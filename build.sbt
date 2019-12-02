@@ -186,12 +186,13 @@ libraryDependencies ++= Seq(
   "org.apache.spark"         %   "spark-hive_2.12"        % "2.4.4",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "com.databricks"           %   "spark-xml_2.12"            % "0.5.0",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   "com.crealytics"           %%  "spark-excel"                    % "0.12.0",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.github.potix2"        %%  "spark-google-spreadsheets"      % "0.6.4",
-  "com.google.api.client"    %   "google-api-client-json"         % "1.2.2-alpha",
+  //"com.google.api.client"    %   "google-api-client-json"         % "1.2.2-alpha",
   "org.apache.hadoop"        %   "hadoop-client"          % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
   "org.apache.hadoop"        %   "hadoop-aws"             % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
   "net.java.dev.jets3t"      %   "jets3t"               % "0.9.4",
- 
+  ("com.google.api-client"   %   "google-api-client"             % "1.22.0").exclude("com.google.guava", "guava-jdk5"),
+  "com.google.oauth-client"  %   "google-oauth-client-jetty"     % "1.22.0",
+  "com.google.apis"          %   "google-api-services-sheets"    % "v4-rev18-1.22.0",
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
   // Used to detect and analyze Functional Dependencies
