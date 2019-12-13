@@ -103,6 +103,8 @@ object MimirSpark
         .config("spark.hadoop.fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
         .config("spark.hadoop.fs.defaultFS", s"hdfs://$sparkHost:$hdfsPort")
         .config("spark.driver.extraJavaOptions", s"-Dderby.system.home=${new File(dataDir).getAbsolutePath}")
+        .config("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .config("spark.hadoop.javax.jdo.option.ConnectionURL", s"jdbc:derby:;databaseName=${new File(dataDir).getAbsolutePath}/metastore_db;create=true")   
     }
     else if(!localSpark){
       installAndRunSpark(config)
@@ -120,6 +122,8 @@ object MimirSpark
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .config("spark.kryoserializer.buffer.max", "1536m")
         .config("spark.driver.extraJavaOptions", s"-Dderby.system.home=${new File(dataDir).getAbsolutePath}")
+        .config("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .config("spark.hadoop.javax.jdo.option.ConnectionURL", s"jdbc:derby:;databaseName=${new File(dataDir).getAbsolutePath}/metastore_db;create=true")   
     }
     else{
       SparkSession.builder.master("local[*]")
@@ -358,6 +362,7 @@ object MimirSpark
     val dataDir = if(config.dataDirectory().endsWith("/")) config.dataDirectory() else config.dataDirectory() + "/"
     val sparkDir = s"${dataDir}spark"
     val sparkDirF = new File(sparkDir)
+    println(s"data directory: $dataDir")
     if(isSparkRunning()) {
       println("spark is already running-------------------------------------")
       return
