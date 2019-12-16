@@ -43,7 +43,9 @@ case class LoadRequest (
             /* optionally provide a name */
                   humanReadableName: Option[String],
             /* options for spark datasource api */
-                  backendOption: Seq[Tuple]
+                  backendOption: Seq[Tuple],
+            /* optionally provide dependencies */
+                  dependencies: Seq[String]
 ) extends Request {
   def handle(os:OutputStream) = {
     os.write(Json.stringify(Json.toJson(LoadResponse(
@@ -53,7 +55,8 @@ case class LoadRequest (
         inferTypes, 
         detectHeaders, 
         humanReadableName, 
-        backendOption.map(tup => tup.name -> tup.value)
+        backendOption.map(tup => tup.name -> tup.value),
+        dependencies
       )
     ))).getBytes )
   }
