@@ -46,6 +46,8 @@ import mimir.util.{
   ExperimentalOptions,
   Timer
 }
+import java.sql.SQLException
+import mimir.ctables.CoarseDependency
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -290,7 +292,7 @@ object MimirVizier extends LazyLogging {
       }
     loadDataSource(file, format, inferTypes, detectHeaders, humanReadableName, backendOptions)
   }
-  def loadDataSource(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, humanReadableName:Option[String], backendOptions:Seq[Any]) : String = {
+  def loadDataSource(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, humanReadableName:Option[String], backendOptions:Seq[Any], dependencies:Seq[String]=Seq()) : String = {
     try{
       apiCallThread = Thread.currentThread()
       val timeRes = logTime("loadDataSource") {
@@ -338,6 +340,16 @@ object MimirVizier extends LazyLogging {
           stageSourceURL = true
         )
       }
+      val (realTargetSchema, realTarget, _) = 
+            db.catalog.resolveTable(tableName)
+                   .getOrElse { throw new SQLException(s"Unknown target table ${tableName}")}
+      val targetTable = (realTargetSchema, realTarget)
+      dependencies.foreach(dependency => {
+        val (realSourceSchema, realSource, _) = 
+              db.catalog.resolveTableCaseInsensitive(dependency)
+                     .getOrElse { throw new SQLException(s"Unknown dependent table ${dependency}") }
+        db.catalog.createDependency(targetTable, CoarseDependency(realSourceSchema, realSource))
+      })
       tableName 
     }
     logger.debug(s"loadDataSource ${timeRes._1.toString} Took: ${timeRes._2}")
