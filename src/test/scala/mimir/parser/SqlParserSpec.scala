@@ -3,6 +3,7 @@ package mimir.parser;
 import java.io.{StringReader,BufferedReader,FileReader,File}
 import java.sql.SQLException
 import scala.collection.JavaConversions._
+import play.api.libs.json._
 
 import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
@@ -331,16 +332,16 @@ class SqlParserSpec
 				CreateLens(Name("test1"), 
 					MimirSQL.Select("SELECT * FROM R").body,
 					Name("MISSING_VALUE"),
-					Seq[sparsity.expression.Expression](
-						sparsity.expression.StringPrimitive("A"), 
-						sparsity.expression.StringPrimitive("B")
-					)
+					JsArray(Seq(
+						JsString("A"),
+						JsString("B")
+					))
 				)
 			stmt("CREATE LENS test2 AS SELECT * FROM R WITH TYPE_INFERENCE();") must be equalTo 
 				CreateLens(Name("test2"), 
 					MimirSQL.Select("SELECT * FROM R").body,
 					Name("TYPE_INFERENCE"),
-					Seq()
+					JsNull
 				)
 
 		}

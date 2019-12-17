@@ -6,7 +6,6 @@ import org.specs2.mutable._
 
 import mimir._
 import mimir.ctables._
-import mimir.ctables.vgterm._
 import mimir.parser._
 import mimir.algebra._
 import mimir.sql._
@@ -33,15 +32,20 @@ object OperatorDeterminismSpec
     ))
   )
 
+  val TEST_LENS = ID("TEST")
+  def testCaveat(
+    value: Expression = IntPrimitive(1), 
+    key: Seq[Expression] = Seq()
+  ) = Caveat(TEST_LENS, value, key, StringPrimitive("Test Caveat"))
+
+
   def table(name: String): Operator =
     Table(ID(name), ID(name), schema(name), Seq())
 
-  def modelLookup(model: ID) = UniformDistribution
-  def schemaLookup(table: String) = schema(table).toList
   def ack(
     idx: Int = 1, 
     args: Seq[Expression] = Seq(RowIdVar())
-  ): Expression = IsAcknowledged(UniformDistribution, idx, args)
+  ): Expression = IsAcknowledged(TEST_LENS, args)
 
   def project(cols: List[(String,String)], src: Operator): Operator =
     Project(cols.map( { case (name,e) => ProjectArg(ID(name), expr(e))}), src) 
@@ -51,7 +55,7 @@ object OperatorDeterminismSpec
       SimpleOptimizeExpressions(
         InlineProjections(
           PullUpConstants(
-            OperatorDeterminism.compile(x, modelLookup(_))
+            OperatorDeterminism.compile(x)
           )
         )
       )
@@ -101,13 +105,13 @@ object OperatorDeterminismSpec
         table("R")
           .map( 
             "A" -> Var("A"), 
-            "B" -> VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq())
+            "B" -> testCaveat()
           )
       ) must be equalTo (
         table("R")
           .mapByID( 
             ID("A") -> Var("A"), 
-            ID("B") -> VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()),
+            ID("B") -> testCaveat(),
             ucol("A") -> TRUE,
             ucol("B") -> ack(),
             urow -> TRUE
@@ -119,13 +123,13 @@ object OperatorDeterminismSpec
         table("R")
           .map(
             "A" -> Var("A"),
-            "B" -> Conditional(IsNullExpression(Var("B")), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var("B"))
+            "B" -> Conditional(IsNullExpression(Var("B")), testCaveat(), Var("B"))
           )
       ) must be equalTo (
         table("R")
           .mapByID(
             ID("A") -> Var("A"),
-            ID("B") -> Conditional(IsNullExpression(Var("B")), VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()), Var("B")),
+            ID("B") -> Conditional(IsNullExpression(Var("B")), testCaveat(), Var("B")),
             ucol("A") -> TRUE,
             ucol("B") -> Conditional(IsNullExpression(Var("B")), ack(), BoolPrimitive(true)),
             urow -> TRUE
@@ -135,10 +139,10 @@ object OperatorDeterminismSpec
     "Handle Data-Independent Non-Deterministic Inline Selection" in {
       percolite(
         table("R")
-          .filter(VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()).eq(IntPrimitive(3)))
+          .filter(testCaveat().eq(IntPrimitive(3)))
       ) must be equalTo (
         table("R")
-          .filter(VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()).eq(IntPrimitive(3)))
+          .filter(testCaveat().eq(IntPrimitive(3)))
           .mapByID(
             ID("A") -> Var("A"),
             ID("B") -> Var("B"),
@@ -154,7 +158,7 @@ object OperatorDeterminismSpec
           .map(
             "A" -> expr("A"),
             "B" -> Var("B").isNull
-                               .thenElse { VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()) }
+                               .thenElse { testCaveat(key=Seq(RowIdVar())) }
                                          { Var("B") }
           )
           .filterParsed("B = 3")
@@ -163,7 +167,7 @@ object OperatorDeterminismSpec
           .mapByID(
             ID("A") -> expr("A"),
             ID("B") -> Var("B").isNull
-                                   .thenElse { VGTerm(ID("X"), 1, Seq(RowIdVar()), Seq()) }
+                                   .thenElse { testCaveat(key=Seq(RowIdVar())) }
                                              { Var("B") },
             ucol("B") -> Var("B").isNull.thenElse(ack()) (BoolPrimitive(true))
           )
@@ -199,13 +203,13 @@ object OperatorDeterminismSpec
     "Handle Non-Deterministic Joins" in {
       percolite(
         table("R")
-          .map( "A" -> VGTerm(ID("X"), 1, Seq(RowIdVar(), Var("A")), Seq()) )
+          .map( "A" -> testCaveat(key=Seq(RowIdVar(), Var("A"))) )
           .join(table("S"))
       ) must be equalTo (
         table("R")
           .join(table("S"))
           .mapByID(
-            ID("A") -> VGTerm(ID("X"), 1, Seq(RowIdVar(), Var("A")), Seq()),
+            ID("A") -> testCaveat(key=Seq(RowIdVar(), Var("A"))),
             ucol("A") -> ack( args = Seq(RowIdVar(), Var("A")) ),
             ID("C") -> Var("C"),
             ID("D") -> Var("D"),
@@ -221,7 +225,7 @@ object OperatorDeterminismSpec
           .filter(
             Var("B").lt { 
               Var("A").lt(3)
-                      .thenElse { VGTerm(ID("X"), 1, Seq(Var("A")), Seq())}
+                      .thenElse { testCaveat(key=Seq(Var("A"))) }
                                 { IntPrimitive(3) }
             }
           )
@@ -230,7 +234,7 @@ object OperatorDeterminismSpec
               .filter(
                 Var("C").lt { 
                   Var("D").gt(5)
-                          .thenElse { VGTerm(ID("X"), 2, Seq(Var("D")), Seq())}
+                          .thenElse { testCaveat(key=Seq(Var("D"))) }
                                     { IntPrimitive(5) }
                 }
               )
@@ -241,7 +245,7 @@ object OperatorDeterminismSpec
             Var("A").lt(3)
                     .thenElse { 
                       Var("B").lt { 
-                        VGTerm(ID("X"), 1, Seq(Var("A")), Seq())
+                        testCaveat(key=Seq(Var("A")))
                       } 
                     } { Var("B").lt(3) }
           )
@@ -251,7 +255,7 @@ object OperatorDeterminismSpec
                 Var("D").gt(5)
                         .thenElse { 
                           Var("C").lt { 
-                            VGTerm(ID("X"), 2, Seq(Var("D")), Seq())
+                            testCaveat(key=Seq(Var("D")))
                           } 
                         } { Var("C").lt(5) }
               )
@@ -286,7 +290,7 @@ object OperatorDeterminismSpec
         table("R")
           .filter(
             Var("A").lt(5)
-                    .thenElse { VGTerm(ID("X"), 1, Seq(Var("A")), Seq()) }
+                    .thenElse { testCaveat(key=Seq(Var("A"))) }
                               { Var("A") }
                     .gt(5)
           )
@@ -295,7 +299,7 @@ object OperatorDeterminismSpec
         table("R")
           .filter(
             Var("A").lt(5)
-                    .thenElse { VGTerm(ID("X"), 1, Seq(Var("A")), Seq()).gt(5) }
+                    .thenElse { testCaveat(key=Seq(Var("A"))).gt(5) }
                               { Var("A").gt(5) }
           )
           .mapByID( 

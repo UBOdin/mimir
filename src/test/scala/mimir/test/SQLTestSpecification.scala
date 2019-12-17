@@ -62,7 +62,6 @@ object DBTestInstances
           if(shouldCleanupDB){    
             dbFile.deleteOnExit();
           }
-          tmpDB.open()
           if(shouldResetDB || !oldDBExists){
             config.get("initial_db") match {
               case None => ()
@@ -130,26 +129,11 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
     db.table(t)
   def resolveViews(q: Operator) =
     db.views.resolve(q)
-  def explainRow(s: String, t: String) = 
-  {
-    val query = resolveViews(select(s))
-    db.uncertainty.explainRow(query, RowIdPrimitive(t))
-  }
-  def explainCell(s: String, t: String, a:String) = 
-  {
-    val query = resolveViews(select(s))
-    db.uncertainty.explainCell(query, RowIdPrimitive(t), ID(a))
-  }
   def explainEverything(s: String) = 
   {
     val query = resolveViews(select(s))
     db.uncertainty.explainEverything(query)
   }
-  def explainAdaptiveSchema(s: String) =
-  {
-    val query = resolveViews(select(s))
-    db.uncertainty.explainAdaptiveSchema(query, query.columnNames.toSet, true)
-  }  
   def dropTable(t: String) =
     db.update(SQLStatement(sparsity.statement.DropTable(sparsity.Name(t), true)))
   def update(s: MimirStatement) = 
@@ -171,6 +155,5 @@ abstract class SQLTestSpecification(val tempDBName:String, config: Map[String,St
       targetSchema = Option(targetSchema).map { _.map { ID(_) } }
     )
     
-  def modelLookup(model: String) = db.models.get(ID(model))
   def schemaLookup(table: String) = db.tableSchema(table).get
  }

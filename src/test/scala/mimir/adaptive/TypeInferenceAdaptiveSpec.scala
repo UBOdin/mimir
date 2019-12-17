@@ -21,12 +21,11 @@ object TypeInferenceAdaptiveSpec
         inferTypes = Some(false)
       )
 
-      db.adaptiveSchemas.create( 
+      db.lenses.create( 
         ID("CPUSPEED_TI"), 
-        ID("TYPE_INFERENCE"), 
+        ID("GUESS_TYPES"), 
         db.table("CPUSPEED"), 
-        Seq(),
-        "CPUSPEED"
+        friendlyName = Some("CPUSPEED")
       )
       
       val baseTypes = db.typechecker.schemaOf(db.table(LoadedTables.SCHEMA, ID("CPUSPEED"))).toMap
@@ -35,7 +34,7 @@ object TypeInferenceAdaptiveSpec
       baseTypes must contain(ID("_c2") -> TString())
 
 
-      val lensTypes = db.typechecker.schemaOf( db.adaptiveSchemas.viewFor(ID("CPUSPEED_TI"), ID("DATA")).get).toMap
+      val lensTypes = db.typechecker.schemaOf( db.lenses.view(ID("CPUSPEED_TI")) ).toMap
       lensTypes must contain(ID("CORES") -> TInt())
       lensTypes must contain(ID("FAMILY") -> TString())
       lensTypes must contain(ID("TECH_MICRON") -> TFloat())

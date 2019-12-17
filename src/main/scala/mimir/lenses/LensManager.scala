@@ -63,7 +63,7 @@ class LensManager(db: Database)
     t: ID, 
     lensName: ID, 
     query: Operator, 
-    config: JsValue,
+    config: JsValue = JsNull,
     friendlyName: Option[String] = None,
     orReplace: Boolean = false
   )
@@ -180,6 +180,8 @@ class LensManager(db: Database)
     )
   }
 
+  def getConfig(lens: ID): JsValue =  get(lens)._3
+
   def warningsFor(
     schema: Option[ID], 
     table: ID, 
@@ -210,7 +212,7 @@ class LensManager(db: Database)
       case (_:MonoLens, Some(schemaName)) =>
         throw new SQLException("Lens $schemaName has no sub-tables.  Use $schemaName instead of $schemaName.$table.")
       case (_:MultiLens, None) =>
-        throw new SQLException("Lens $table is a schema and you need to specify a table; Use $schemaName.tableName instead of $schemaName.")
+        throw new SQLException("You need to specify which table of table; Use $schemaName.tableName instead of $schemaName.")
     }
   }
 

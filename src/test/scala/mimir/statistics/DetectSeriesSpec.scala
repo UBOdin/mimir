@@ -23,8 +23,7 @@ object DetectSeriesSpec
 	sequential
 	
 	def testDetectSeriesof(oper: Operator) = {
-	  val (schema, df) = SparkUtils.getDataFrameWithProvFromQuery(db, oper)
-    DetectSeries.seriesOf(df, schema, 0.1).collect().toSeq
+    DetectSeries.seriesOf(db, oper).map{_.name.toString}
 	}
 	
 	
@@ -36,7 +35,7 @@ object DetectSeriesSpec
 		
 		"Be able to detect Date and Timestamp type" >> {
 			val queryOper = select("SELECT * FROM DetectSeriesTest1")
-			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
+			val colSeq: Seq[String] = testDetectSeriesof(queryOper)
 			
 			colSeq must have size(4)
 			colSeq must contain("TRAN_TS","EXP_DT", "JOIN_DT", "DOB")
@@ -53,7 +52,7 @@ object DetectSeriesSpec
         )
 
 			val queryOper = select("SELECT * FROM DetectSeriesTest3")
-			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
+			val colSeq: Seq[String] = testDetectSeriesof(queryOper)
 			
 			colSeq must have size(2)
 			colSeq must contain("JN_DT", "JN_TS")
@@ -65,7 +64,7 @@ object DetectSeriesSpec
 
 		"Be able to detect Date, Timestamp and increasing-decreasing Numeric type" >> {
 			val queryOper = select("SELECT * FROM DetectSeriesTest2")
-			val colSeq: Seq[String] = testDetectSeriesof(queryOper).map{_.columnName.toString}
+			val colSeq: Seq[String] = testDetectSeriesof(queryOper)
 			
 			colSeq must have size(6)
 			colSeq must contain("TRAN_TS","EXP_DT", "JOIN_DT", "DOB", "ROW_ID", "QUALITY")

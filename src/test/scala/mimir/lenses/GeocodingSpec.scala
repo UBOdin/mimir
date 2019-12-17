@@ -8,7 +8,6 @@ import mimir.test._
 import org.specs2.specification._
 import org.joda.time.DateTime
 import java.util.Locale
-import mimir.exec.mode.DumpDomain
 import play.api.libs.json. { JsArray, JsValue, JsObject }
 
 import sparsity.Name
@@ -260,36 +259,20 @@ object GeocodingSpec
         WITH GEOCODE(HOUSE_NUMBER(STRNUMBER),STREET(STRNAME),CITY(CITY),STATE(STATE),GEOCODER(GOOGLE),API_KEY('AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk'))
       """);
       
-      val result = db.query(select("SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, json_extract(LONGITUDE,'$.values') AS DOMAIN_LON FROM GEO_LENS_DOMAIN_DUMP_GOOGLE"), 
-          DumpDomain){ _.map { row => 
+      val result = db.query(select("""
+        SELECT json_extract(LATITUDE,'$.values') AS DOMAIN_LAT, 
+               json_extract(LONGITUDE,'$.values') AS DOMAIN_LON 
+        FROM GEO_LENS_DOMAIN_DUMP_GOOGLE"""
+      )){ _.map { row => 
         (
           row(ID("DOMAIN_LAT")), 
           row(ID("DOMAIN_LON"))
         )
       }.toList }.toList
-      
-      val jsonLat = play.api.libs.json.Json.parse(result(1)._1.asString)
-      val domainLatForRow = jsonLat.as[Seq[JsValue]]
-                                   .map { jsVal => (
-                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
-                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
-                                    )}
-      // val domainLatForRow = jsonLat.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
-      
-      val jsonLon = play.api.libs.json.Json.parse(result(1)._2.asString)
-      val domainLonForRow = jsonLon.as[Seq[JsValue]]
-                                   .map { jsVal => (
-                                      jsVal.asInstanceOf[JsObject].value("choice").toString().toDouble, 
-                                      jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble
-                                    )}
-      // val domainLonForRow = jsonLon.asInstanceOf[JsArray].value.map(jsVal => (jsVal.asInstanceOf[JsObject].value("choice").toString(), jsVal.asInstanceOf[JsObject].value("weight").toString().toDouble))
-      
-      domainLatForRow.length must be equalTo domainLonForRow.length
-      domainLatForRow.head._1 must beCloseTo(42.908687 within 2.significantFigures)
-      domainLatForRow.head._2 must beEqualTo(1.0)
-      domainLonForRow.head._1 must beCloseTo(-78.88065 within 2.significantFigures)
-      domainLonForRow.head._2 must beEqualTo(1.0)
-      
+            
+      result(1)._1.asDouble must beCloseTo(42.908687 within 2.significantFigures)
+      result(1)._2.asDouble must beCloseTo(-78.88065 within 2.significantFigures)
+
     }
 
   }

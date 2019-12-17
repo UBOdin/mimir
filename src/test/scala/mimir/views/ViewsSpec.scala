@@ -128,7 +128,7 @@ object ViewsSpec
       val (query, rowidCols) = Provenance.compile(db.views(ID("MATTEST")).operator)
 
       db.compiler.optimize(
-        db.views.resolve(OperatorDeterminism.compile(query, db.models.get(_))) 
+        db.views.resolve(OperatorDeterminism.compile(query)) 
       ) must be equalTo(
         Project(Seq(
             ProjectArg(ID("A"), Var(ID("A"))),

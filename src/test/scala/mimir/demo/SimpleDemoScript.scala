@@ -102,8 +102,13 @@ object SimpleDemoScript
 
 
 		"Create and Query Type Inference Adaptive Schemas" >> {
-			db.adaptiveSchemas.create(ID("NEW_TYPES_TI"), ID("TYPE_INFERENCE"), db.table("USERTYPES"), Seq(FloatPrimitive(.9)), "NEW_TYPES") 
-			db.views.create(ID("NEW_TYPES"), db.adaptiveSchemas.viewFor(ID("NEW_TYPES_TI"), ID("DATA")).get)
+			db.lenses.create(
+				ID("GUESS_TYPES"), 
+				ID("NEW_TYPES_TI"), 
+				db.table("USERTYPES"), 
+				friendlyName = Some("NEW_TYPES")
+			) 
+			db.views.create(ID("NEW_TYPES"), db.lenses.view(ID("NEW_TYPES_TI")))
       query("SELECT * FROM NEW_TYPES;"){ _.toSeq must have size(3) }
 			query("SELECT * FROM RATINGS1;"){ _.toSeq must have size(4) }
 			query("SELECT RATING FROM RATINGS1;"){ _.map { _(0) }.toSeq must contain(eachOf(f(4.5), f(4.0), f(6.4), NullPrimitive())) }
@@ -167,7 +172,9 @@ object SimpleDemoScript
 				  AS SELECT * FROM RATINGS2 
 				  WITH SCHEMA_MATCHING('PID string', 'RATING float', 'REVIEW_CT float')
 			""")
-			db.views.create(ID("RATINGS2FINAL"), db.adaptiveSchemas.viewFor(ID("RATINGS2FINAL_SM"), ID("DATA")).get)
+			db.views.create(
+				ID("RATINGS2FINAL"), 
+				db.lenses.view(ID("RATINGS2FINAL_SM")))
 			query("SELECT RATING FROM RATINGS2FINAL") { result =>
 				val result1 = result.toList.map { _(0).asDouble }.toSeq 
 				result1 must have size(3)
@@ -189,25 +196,6 @@ object SimpleDemoScript
 		}
 
 		
-		"Obtain Cell Explanations for Simple Queries" >> {
-		  val expl1 = explainCell("""
-					SELECT * FROM RATINGS1FINAL
-				""", "-1083566332", "RATING")
-			expl1.toString must contain("I used a classifier to fix RATINGS1FINAL.RATING")		
-		}
-		"Obtain Cell Explanations for Queries with WHERE clauses" >> {
-			val expl1 = explainCell("""
-					SELECT * FROM RATINGS1FINAL WHERE RATING > 0
-				""", "-1083566332", "RATING")
-			expl1.toString must contain("I used a classifier to fix RATINGS1FINAL.RATING")		
-		}
-		"Guard Data-Dependent Explanations for Simple Queries" >> {
-			val expl2 = explainCell("""
-					SELECT * FROM RATINGS1FINAL
-				""", "1839481200", "RATING")
-			expl2.toString must not contain("I used a classifier to fix RATINGS1FINAL.RATING")		
-		}
-
 		"Query a Union of Lenses (projection first)" >> {
 			query("""
 				SELECT PID FROM RATINGS1FINAL
@@ -316,7 +304,7 @@ object SimpleDemoScript
 						Where ROWID() = '3|1|4'""")
 					db.uncertainty.explainEverything(oper).flatMap(_.all(db))
 				}
-			explain0.map(_.model.name.id.replaceAll(":.*", "")) must contain(eachOf(
+			explain0.map(_.lens.id.replaceAll(":.*", "")) must contain(eachOf(
 				"RATINGS2FINAL_SM"//,
 				//"RATINGS2"
 			))

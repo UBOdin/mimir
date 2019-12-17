@@ -50,9 +50,9 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") with 
               // println(s"$file -> parsed: $s")
               val query = db.sqlToRA(s)
               // println(s"converted: $query")
-              val serialized = Json.ofOperator(query)
+              val serialized = AlgebraJsonCodecs.ofOperator(query)
               // println(s"serialized: $serialized")
-              val deserialized = Json.toOperator(serialized)
+              val deserialized = AlgebraJsonCodecs.toOperator(serialized)
               // println(s"deserialized: $deserialized")
 
               Some(deserialized must be equalTo query)

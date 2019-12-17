@@ -16,7 +16,6 @@ import mimir.algebra.BoolPrimitive
 import mimir.test.TestTimer
 import mimir.util.BackupUtils
 import mimir.util.LoggerUtils
-import mimir.ctables.DataWarningReason
 import mimir.data.FileFormat
 
 object SparkMimirCSVDataSourceSpec 

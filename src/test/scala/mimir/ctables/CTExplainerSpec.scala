@@ -32,12 +32,12 @@ object CTExplainerSpec
 
       val resultSets = db.uncertainty.explainEverything(table("MV"))
       
-      resultSets.map( _.model.name.id ) must contain(eachOf(
+      resultSets.map( _.lens.id ) must contain(eachOf(
          "MV:SPARKML:B", "MV:SPARKML:C", "MIMIR_TI_ATTR_R_TI"
       ))
 
       resultSets.map {
-        set => (set.model.name.id -> set.size(db)) 
+        set => (set.lens.id -> set.size(db)) 
       }.toMap must contain(eachOf(
         ("MV:SPARKML:B" -> 1l),
         ("MV:SPARKML:C" -> 1l),
@@ -45,33 +45,13 @@ object CTExplainerSpec
       ))
 
       val explanations = resultSets.map { 
-        set => (set.model.name.id -> set.allArgs(db).map(_._1.toList).toList)
+        set => (set.lens.id -> set.allArgs(db).map(_._1.toList).toList)
       }.toMap 
       explanations must contain(eachOf(
         ("MV:SPARKML:B" -> List(List[PrimitiveValue](RowIdPrimitive("2066842439")))),
         ("MV:SPARKML:C" -> List(List[PrimitiveValue](RowIdPrimitive("586364262")))),
         ("MIMIR_TI_ATTR_R_TI" -> List(0, 1, 2).map { i => List(IntPrimitive(i)) })
       ))
-    }
-
-    "Explain individual cells" >> {
-      val reasons = 
-        explainCell("""
-          SELECT * FROM MV
-        """, "2066842439", "B"
-        ).reasons.map(_.reason).mkString("\n")
-      reasons must contain("I used a classifier to fix MV.B")
-    }
-
-    "Explain rows" >> {
-      val reasons = 
-        explainRow("""
-          SELECT * FROM MV
-          WHERE C > 1
-        """, "586364262"
-        ).reasons.map(_.reason).mkString("\n")
-      reasons must contain("I used a classifier to fix MV.C")
-
     }
 
   }

@@ -81,8 +81,8 @@ class MimirVizierSpec
       MimirVizier.db.tableExists("CPUSPEED_MISSING") must beFalse
       val response = MimirVizier.createLens(
         "CPUSPEED",
-        Seq("BUS_SPEED_MHZ"),
-        "MISSING_VALUE",
+        "[\"BUS_SPEED_MHZ\"]",
+        "DOMAIN",
         false,
         false,
         Some("MISSING_CPUSPEED_BUS_SPEED_MHZ")
@@ -97,7 +97,7 @@ class MimirVizierSpec
       MimirVizier.db.tableExists("PICK_MISSING") must beFalse
       val presponse = MimirVizier.createLens(
         "PICK",
-        Seq("B"),
+        "[\"B\"]",
         "MISSING_VALUE",
         false,
         false,
