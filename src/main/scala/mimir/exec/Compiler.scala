@@ -159,7 +159,16 @@ class Compiler(db: Database) extends LazyLogging {
   
   def sparkBackendRootIterator(oper:Operator) : (Seq[(ID, Type)], ResultIterator) = {
     val schema = db.typechecker.schemaOf(oper) 
-    (schema, new SparkResultIterator(schema, oper, db))
+    (schema, new SparkResultIterator(schema, 
+        () => {
+          // Deploy to the backend
+          Timer.monitor(s"EXECUTE", logger.info(_)){
+            db.compiler.compileToSparkWithoutRewrites(oper)
+                       .cache()
+                       .collect()
+          }
+        }
+      ))
   }
   
   // case class VirtualizedQuery(

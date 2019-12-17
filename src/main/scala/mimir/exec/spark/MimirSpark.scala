@@ -31,6 +31,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{
   Literal
 }
+import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.{SparkContext, SparkConf}
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import java.io.File
@@ -271,14 +272,19 @@ object MimirSpark
     SparkFunctions.register(fr)
   }
   
+
   def registerSparkAggregates(excludedFunctions:Seq[ID], ar:AggregateRegistry) = {
-    val sparkFunctions = 
+    val catalog:SessionCatalog = 
         get.sparkSession
            .sessionState
            .catalog
+    val sparkFunctions = 
+        catalog
            .listFunctions("mimir")
-    sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).flatMap{ case (fidentifier, fname) => {
-          val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
+    sparkFunctions
+      .filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase())))
+      .flatMap{ case (fidentifier, fname) => {
+          val fClassName = catalog.lookupFunctionInfo(fidentifier).getClassName
           if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             Some((fidentifier.funcName, 
             (inputTypes:Seq[Type]) => {

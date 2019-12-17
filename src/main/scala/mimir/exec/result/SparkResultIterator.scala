@@ -1,6 +1,7 @@
 package mimir.exec.result
 
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{ Row => SparkRow }
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.Database
@@ -10,8 +11,7 @@ import mimir.util.Timer
 
 class SparkResultIterator(
   inputSchema: Seq[(ID,Type)],
-  query: Operator,
-  db: Database
+  getDataframe: () => Seq[SparkRow]
 ) 
   extends ResultIterator
   with LazyLogging 
@@ -29,16 +29,7 @@ class SparkResultIterator(
       }
 
   var closed = false
-  lazy val dataframeIter = 
-  {
-    // Deploy to the backend
-    Timer.monitor(s"EXECUTE", logger.info(_)){
-      db.compiler.compileToSparkWithoutRewrites(query)
-                 .cache()
-                 .collect()
-                 .toIterator
-    }
-  }
+  lazy val dataframeIter = getDataframe().toIterator
   
   def close(): Unit = {
     closed = true

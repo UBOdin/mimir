@@ -24,7 +24,7 @@ import mimir.data.LoadedTables
 import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
 import mimir.exec.Compiler
 import mimir.exec.mode.{CompileMode, BestGuess}
-import mimir.exec.result.{ResultIterator,SampleResultIterator,Row}
+import mimir.exec.result.{ResultIterator,Row}
 import mimir.exec.spark.MimirSpark
 import mimir.lenses.{LensManager}
 import mimir.metadata.MetadataBackend
