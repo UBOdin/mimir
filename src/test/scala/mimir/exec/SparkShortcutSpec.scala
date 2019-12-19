@@ -90,6 +90,20 @@ class SparkShortcutSpec
           ID("TOT")
         )
       ) must beEqualTo(IntPrimitive(2))
+
+      aggregateOne(
+        AggFunction(
+          ID("approx_percentile"),
+          true,
+          Seq(
+            CastExpression(Var(ID("a")), TFloat()),
+            FloatPrimitive(0.2),
+            IntPrimitive(100)
+          ),
+          ID("TOT")
+        )
+      ) must beEqualTo(IntPrimitive(2))
+
     }
 
   }

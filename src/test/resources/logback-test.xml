@@ -42,6 +42,7 @@
   <logger name="mimir.exec.result.ProjectionResultIterator"        level="WARN"/>
   <logger name="mimir.exec.result.AggregateResultIterator"         level="WARN"/>
   <logger name="mimir.exec.result.JDBCResultIterator"              level="WARN"/>
+  <logger name="mimir.exec.spark.MimirSpark"                       level="WARN"/>
 
   <!--+++++++++++++++++++++++  Lenses  ++++++++++++++++++++++++-->
   <logger name="mimir.lenses.BestGuessCache"                       level="WARN"/>

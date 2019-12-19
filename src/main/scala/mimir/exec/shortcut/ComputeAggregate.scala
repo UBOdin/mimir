@@ -96,7 +96,7 @@ object ComputeAggregate
 
     if(agg.distinct){
       return (
-        { () => new DistinctAggregate(aggregateEval()) },
+        { () => new DistinctAggregate(aggregateEval(), fields) },
         fields
       )
     } else {
@@ -149,7 +149,7 @@ class SparkImperativeAggregate(
 {
   val buffer = {
     val row = new GenericInternalRow(
-      agg.aggBufferAttributes.map { null }.toArray[Any]
+      agg.aggBufferAttributes.map { _ => null }.toArray[Any]
     )
     agg.initialize(row)
     row
