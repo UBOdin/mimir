@@ -8,6 +8,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.parser._
 
+
 object CommentLens {
   def create(
     db: Database, 
@@ -20,8 +21,10 @@ object CommentLens {
     val colComments = args.flatMap {
       case Function(ID("comment"), cols ) => 
         Some( cols match {
-            case Seq(vcol@Var(col), StringPrimitive(comment)) => (vcol, comment)
-            case Seq(expr:Expression, StringPrimitive(comment)) => (expr, comment)
+            case Seq(vcol@Var(col), StringPrimitive(comment)) => (vcol, comment, None)
+            case Seq(expr:Expression, StringPrimitive(comment)) => (expr, comment, None)
+            case Seq(vcol@Var(col), StringPrimitive(comment),StringPrimitive(rid)) => (vcol, comment, Some(rid))
+            case Seq(expr:Expression, StringPrimitive(comment),StringPrimitive(rid)) => (expr, comment, Some(rid))
             case x => throw new RAException(s"No or bad comments specified for $name: $x")
           } )
       case _ => None
@@ -38,15 +41,27 @@ object CommentLens {
       case _ => None
     }.flatten
     
+    
     val argTypesAndExprs = colComments.zipWithIndex.map {
-      case ((expr, comment), index) => {
+      case ((expr, comment, rowIdOpt), index) => {
         val outputCol = 
           if(resultCols.length > index)
             resultCols(index)
           else
             ID("COMMENT_ARG_"+index)
         (
-          ProjectArg(outputCol, VGTerm(modelName, index, Seq(RowIdVar()), Seq(expr))),
+          ProjectArg(outputCol, rowIdOpt match { 
+            case Some(rowid) => ExpressionUtils.makeCaseExpression( 
+                  RowIdVar().eq(RowIdPrimitive(rowid)), 
+                  Seq(
+                    (BoolPrimitive(true), VGTerm(modelName, index, Seq(RowIdVar()), Seq(expr))),
+                    (BoolPrimitive(false),expr)
+                  ),
+                  expr
+                )
+            case None => expr
+          }
+            ),
           (outputCol, db.typechecker.typeOf(expr, query)),
           comment
         )
@@ -61,7 +76,9 @@ object CommentLens {
       argTypesAndExprs._3
     )
     val projArgs =  
-      query.columnNames.map( col => {
+      query.columnNames
+        .filterNot(col => resultCols.contains(col))
+        .map( col => {
           ProjectArg(col, Var(col))
       }).union( argTypesAndExprs._1)
     val oper = Project(projArgs, query)
