@@ -8,6 +8,9 @@ import org.apache.spark.sql.{
   SparkSession,
   SaveMode
 }
+import org.apache.spark.sql.catalog.{
+  Function => SparkFunction
+}
 import org.apache.spark.sql.execution.command.{
   CreateViewCommand,
   PersistedView,
@@ -29,7 +32,11 @@ import org.apache.spark.sql.types.{
 }
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{
-  Literal
+  Literal,
+  Expression => SparkExpression
+}
+import org.apache.spark.sql.catalyst.expressions.aggregate.{
+  AggregateFunction
 }
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
 import org.apache.spark.{SparkContext, SparkConf}
@@ -301,5 +308,49 @@ object MimirSpark
         logger.debug("registering spark aggregate: " + sa._1)
         ar.register(ID(sa._1), sa._2,sa._3)
        })    
+  }
+
+  def getFunction(fn: ID): SparkFunction =
+  {
+    get.sparkSession
+       .catalog
+       .getFunction(fn.id)
+  }
+
+  def makeAggregate(fn: ID, args: Seq[SparkExpression]): AggregateFunction =
+  {
+    val defn = getFunction(fn)
+    val clazz = Class.forName(defn.className)
+    if(!classOf[AggregateFunction].isAssignableFrom(clazz)){
+      throw new RAException(s"'$fn' is not an aggregate")
+    }
+
+    var errorMessage = s"Aggregate '$fn' uses a non-standard constructor"
+
+    // try to find a valid allocator
+    for(alloc <- clazz.getDeclaredConstructors()){
+      val argTypes = alloc.getParameterTypes.toSeq
+
+      // Two possibilities here that seem to cover most cases: 
+      // 1. argTypes is an length-n sequence of [SparkExpression]s
+      //    `---> Ensure argtypes and args have the same length
+      //       `> Construct with args as the sequence of parameters
+      // 2. argTypes is a length-1 sequence  of [Seq[SparkExpression]]
+      //    `---> Construct with Seq(args) as the sequence of parameters
+
+      argTypes match { 
+        case Seq(x) if classOf[Seq[SparkExpression]].isAssignableFrom(x) => 
+          return alloc.newInstance(args).asInstanceOf[AggregateFunction]
+        case _ if argTypes.forall { classOf[SparkExpression].isAssignableFrom(_) } => {
+          if(argTypes.length != args.length){
+            errorMessage = "Wrong number of arguments for '$fn'.  Expected ${argTypes.length}, but got ${args.length}."
+          } else {
+            return alloc.newInstance(args:_*).asInstanceOf[AggregateFunction]
+          }
+        }
+        case _ => ()
+      }
+    }
+    throw new UnsupportedOperationException(errorMessage)
   }
 }

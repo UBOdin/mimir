@@ -47,6 +47,7 @@ import org.apache.spark.sql.catalyst.expressions.{
   RowNumber,
   MonotonicallyIncreasingID,
   NamedExpression,
+  Attribute,
   AttributeReference,
   Alias,
   SortOrder,
@@ -89,7 +90,8 @@ import org.apache.spark.sql.catalyst.expressions.{
   CreateStruct,
   GetStructField,
   ConcatWs,
-  CreateArray
+  CreateArray,
+  GenericInternalRow
 }
 import org.apache.spark.sql.catalyst.expressions.aggregate.{
   DeclarativeAggregate,
@@ -154,7 +156,6 @@ import mimir.data._
 import mimir.exec.spark.udf._
 import mimir.exec.sqlite.VGTermFunctions
 import mimir.models.Model
-import mimir.provenance.Provenance
 import mimir.util.SparkUtils
 
 
@@ -759,6 +760,18 @@ object RAToSpark {
   def mimirSchemaToStructType(schema:Seq[(ID, Type)]):StructType = {
     StructType(schema.map(col => StructField(col._1.id, getSparkType(col._2), true)))  
   }
+
+  def mimirColumnToAttribute(col: (ID, Type)): Attribute = {
+    AttributeReference(
+      col._1.id, 
+      RAToSpark.getSparkType(col._2), 
+      true, 
+      Metadata.empty
+    )()
+  }
+  def mimirSchemaToAttributeSeq(schema: Seq[(ID, Type)]): Seq[Attribute] = {
+    schema.map { mimirColumnToAttribute(_) }
+  }
   
   def structTypeToMimirSchema(schema:StructType): Seq[(ID, Type)] = {
     schema.fields.map(col => (ID(col.name), getMimirType(col.dataType)))  
@@ -833,52 +846,6 @@ object RAToSpark {
       case x =>  x.asString
     }
   }
-  
-  def extractTables(oper: Operator): Seq[String] = 
-  {
-    oper match {
-      case Table(name, source, tgtSch, tgtMetadata) => Seq(name.id)
-      case _ => oper.children.map(extractTables(_)).flatten
-    }
-  }
-  
-  /*def mimirOpToDF(sqlContext:SQLContext, oper:Operator) : DataFrame = {
-    val sparkOper = RAToSpark.mimirOpToSparkOp(oper)
-    logger.debug("---------------------------- Mimir Oper -----------------------------")
-    logger.debug(oper)
-    logger.debug("---------------------------- Spark Oper -----------------------------")
-    logger.debug(sparkOper)
-    logger.debug("---------------------------------------------------------------------")
-    
-    val sparkTables = sqlContext.sparkSession.catalog.listTables().collect()
-    extractTables(oper).map(t => {
-      if(!sparkTables.contains(t)){
-        logger.debug(s"loading table into spark: $t")
-        sqlContext.read.format("jdbc")
-          .options( 
-            Map(
-              "url" -> s"jdbc:sqlite:${db.backend.asInstanceOf[mimir.sql.JDBCBackend].filename}",
-              "dbtable" -> t)).load().registerTempTable(t)
-      }
-      true
-    })
-    
-
-    val qe = sqlContext.sparkSession.sessionState.executePlan(sparkOper)
-    qe.assertAnalyzed()
-    new Dataset[Row](sqlContext.sparkSession, RAToSpark.mimirOpToSparkOp(oper), RowEncoder(qe.analyzed.schema)).toDF()
-    
-        
-    /*val cls = DataSource.lookupDataSource("jdbc")
-    logger.debug(cls.getName)
-    sqlContext.sparkSession.baseRelationToDataFrame(
-      DataSource.apply(
-        sqlContext.sparkSession,
-        paths = Seq.empty,
-        userSpecifiedSchema = None,
-        className = "jdbc",
-        options = Map("url" -> "jdbc:sqlite:debug.db") ).resolveRelation())*/
-  }*/
   
   def mimirPrimitiveToSparkPrimitive(primitive : PrimitiveValue) : Literal = {
     primitive match {
@@ -967,6 +934,15 @@ object RAToSpark {
           native
         }):_*)))(RowEncoder(mimirSchemaToStructType(schema)))
     
+  }
+
+  def mimirPrimitivesToSparkInternalRow(primitives: Seq[PrimitiveValue]): GenericInternalRow =
+  {
+    new GenericInternalRow(
+      primitives.map { 
+        RAToSpark.mimirPrimitiveToSparkInternalRowValue(_)
+      }.toArray
+    )
   }
   
   def fillNullValues(df:DataFrame) : DataFrame = {

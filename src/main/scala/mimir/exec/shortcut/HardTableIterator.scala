@@ -14,7 +14,9 @@ class HardTableIterator(
   def close() {}
   def hasNext(): Boolean = { idx < data.size-1 }
   def next(): Row = { 
-    idx += 1
-    ExplicitRow(data(idx), Seq(), this) 
+    if(hasNext()){
+      idx += 1
+      ExplicitRow(data(idx), Seq(), this) 
+    } else { null }
   }
 }
