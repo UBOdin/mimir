@@ -7,7 +7,7 @@ import mimir.algebra.function._
 import mimir.models._
 import mimir.exec.spark._
 
-case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[org.apache.spark.sql.catalyst.expressions.Expression], argTypes:Seq[Type]) extends MimirUDF {
+case class FunctionUDF(inSchema:Seq[(ID,Type)], name:String, function:RegisteredFunction, params:Seq[org.apache.spark.sql.catalyst.expressions.Expression], argTypes:Seq[Type]) extends MimirUDF {
   val sparkArgs = params.toList.toSeq
   val sparkArgTypes = argTypes.map(argT => RAToSpark.getSparkType(argT)).toList.toSeq
   val dataType = function match { 

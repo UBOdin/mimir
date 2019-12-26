@@ -61,25 +61,39 @@ object ComputeAggregate
     ) =
   {
     val schemaMap = input.tupleSchema.toMap
-    val fields:Seq[(Attribute, Expression)] = 
+    val fields:Seq[Either[(Attribute, Expression), SparkExpression]] = 
       agg.args.zipWithIndex.map { case (expr, idx) => 
         val fieldName = ID(s"${agg.alias.id}:$idx")
         val fieldType = db.typechecker.typeOf(expr, schemaMap(_))
 
         val attr = RAToSpark.mimirColumnToAttribute(fieldName -> fieldType)
 
-        (attr -> expr)
+        if(ExpressionUtils.isDataDependent(expr)){ 
+          Left(attr -> expr)
+        } else {
+          Right(RAToSpark.mimirPrimitiveToSparkPrimitive(
+            db.interpreter.eval(expr)
+          ))
+        }
       }
 
+    val arguments: Seq[SparkExpression] = 
+      fields.map {
+        case Left( (attr, _) ) => attr
+        case Right(expr) => expr
+      }
+
+
     val aggDefn:AggregateFunction = 
-      MimirSpark.makeAggregate(agg.function, fields.map { _._1 })
+      MimirSpark.makeAggregate(agg.function, arguments)
 
     val aggregateEval = 
       aggDefn match { 
         case decl:DeclarativeAggregate => 
         {
           val emptyRow = new GenericInternalRow(Array[Any]())
-          val schema = fields.map { _._1 } ++ decl.aggBufferAttributes
+          val schema = fields.collect { case Left( (attr, _) ) => attr } ++ 
+                         decl.aggBufferAttributes
           val updateExpressions = 
             decl.updateExpressions.map { bindReference(_, schema) }
           val finalExpression =
@@ -94,13 +108,17 @@ object ComputeAggregate
         }
       }
 
+    val inputExpressions = fields.collect { 
+      case Left( projection ) => projection
+    }
+
     if(agg.distinct){
       return (
-        { () => new DistinctAggregate(aggregateEval(), fields) },
-        fields
+        { () => new DistinctAggregate(aggregateEval()) },
+        inputExpressions
       )
     } else {
-      return (aggregateEval, fields)
+      return (aggregateEval, inputExpressions)
     }
 
   }

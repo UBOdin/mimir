@@ -166,13 +166,20 @@ class RAToSpark(db: mimir.Database)
     oper match {
       case Project(cols, src) => {
   			org.apache.spark.sql.catalyst.plans.logical.Project(cols.map(col => {
-          mimirExprToSparkNamedExpr(src, col.name, col.expression)
+          mimirExprToSparkNamedExpr(db.typechecker.schemaOf(src), col.name, col.expression)
         }), mimirOpToSparkOp(src))
 			}
 			case Aggregate(groupBy, aggregates, source) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Aggregate(
-          groupBy.map(mimirExprToSparkExpr(source,_)),
-          groupBy.map( gb => Alias( UnresolvedAttribute.quoted(gb.id), gb.id)()) ++ aggregates.map( mimirAggFunctionToSparkNamedExpr(source,_)),
+          groupBy.map { 
+            mimirExprToSparkExpr(db.typechecker.schemaOf(source),_)
+          },
+          groupBy.map { gb => 
+            Alias( UnresolvedAttribute.quoted(gb.id), gb.id)()
+          } ++ 
+          aggregates.map { 
+            mimirAggFunctionToSparkNamedExpr(db.typechecker.schemaOf(source),_)
+          },
           mimirOpToSparkOp(source))
 			}
 			/*case Select(condition, join@Join(lhs, rhs)) => {
@@ -181,15 +188,25 @@ class RAToSpark(db: mimir.Database)
 			}*/
 			case Select(cond, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Filter(
-			      mimirExprToSparkExpr(oper,cond), mimirOpToSparkOp(src))
+			      mimirExprToSparkExpr(db.typechecker.schemaOf(oper),cond), mimirOpToSparkOp(src))
 			}
 			case LeftOuterJoin(lhs, rhs, cond@BoolPrimitive(_)) => {
-			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Cross, Some(mimirExprToSparkExpr(oper,cond)))
+			  org.apache.spark.sql.catalyst.plans.logical.Join( 
+          mimirOpToSparkOp(lhs),
+          mimirOpToSparkOp(rhs), 
+          Cross, 
+          Some(mimirExprToSparkExpr(db.typechecker.schemaOf(oper),cond))
+        )
 			}
 			case LeftOuterJoin(lhs, rhs, condition) => {
 			  //org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), LeftOuter, Some(mimirExprToSparkExpr(oper,condition)))
 			  val joinType = LeftOuter
-			  makeSparkJoin(lhs, rhs, Some(mimirExprToSparkExpr(oper,condition)), joinType) 
+			  makeSparkJoin(
+          lhs, 
+          rhs, 
+          Some(mimirExprToSparkExpr(db.typechecker.schemaOf(oper),condition)), 
+          joinType
+        ) 
 			}
 			case Join(lhs, rhs) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Join( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs), Cross, None)
@@ -255,9 +272,26 @@ class RAToSpark(db: mimir.Database)
                 meta match {
                   case Seq() => plan
                   case _ => {
-                    org.apache.spark.sql.catalyst.plans.logical.Project(sch.map(col => {
-                      mimirExprToSparkNamedExpr(oper, col._1, Var(col._1))
-                    }) ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)), plan)
+                    org.apache.spark.sql.catalyst.plans.logical.Project(
+                      sch.map { col => 
+                        mimirExprToSparkNamedExpr(
+                          db.typechecker.schemaOf(oper), 
+                          col._1, 
+                          Var(col._1)
+                        )
+                      } ++ 
+                      meta.filterNot { el => 
+                        sch.unzip._1.contains(el._1)
+                      } .distinct
+                        .map { metaEl => 
+                          mimirExprToSparkNamedExpr(
+                            db.typechecker.schemaOf(oper), 
+                            metaEl._1, 
+                            metaEl._2
+                          )
+                        }, 
+                     plan
+                   )
                   }
                 }
               } else {
@@ -265,10 +299,26 @@ class RAToSpark(db: mimir.Database)
                   oper.columnNames.filterNot(el => meta.unzip3._1.contains(el)).map { col =>
                     attributesNeedingProjection.get(col) match {  
                       case Some(target) => 
-                        mimirExprToSparkNamedExpr(oper, col, Var(target)) 
-                      case None => mimirExprToSparkNamedExpr(oper, col, Var(col)) 
+                        mimirExprToSparkNamedExpr(
+                          db.typechecker.schemaOf(oper), 
+                          col, 
+                          Var(target)
+                        ) 
+                      case None => 
+                        mimirExprToSparkNamedExpr(
+                          db.typechecker.schemaOf(oper), 
+                          col, 
+                          Var(col)
+                        ) 
                       }
-                  } ++ meta.filterNot(el => sch.unzip._1.contains(el._1)).filterNot(el => realSchema.unzip._1.contains(el._1)).distinct.map(metaEl => mimirExprToSparkNamedExpr(oper, metaEl._1, metaEl._2)),
+                  } ++ meta.filterNot { el => sch.unzip._1.contains(el._1) }
+                           .filterNot { el => realSchema.unzip._1.contains(el._1) }
+                           .distinct
+                           .map { metaEl => mimirExprToSparkNamedExpr(
+                                               db.typechecker.schemaOf(oper), 
+                                               metaEl._1, 
+                                               metaEl._2) 
+                           },
                   plan
                 )
               }
@@ -320,7 +370,12 @@ class RAToSpark(db: mimir.Database)
       }
 			case Sort(sortCols, src) => {
 			  org.apache.spark.sql.catalyst.plans.logical.Sort(
-          sortCols.map(sortCol => SortOrder(mimirExprToSparkExpr(oper,sortCol.expression),if(sortCol.ascending) Ascending else Descending)),
+          sortCols.map { sortCol => 
+            SortOrder(
+              mimirExprToSparkExpr(db.typechecker.schemaOf(oper),sortCol.expression),
+              if(sortCol.ascending) Ascending else Descending
+            )
+          },
           true,
           mimirOpToSparkOp(src))
 			}
@@ -528,56 +583,56 @@ class RAToSpark(db: mimir.Database)
   }
  
   
-  def mimirExprToSparkNamedExpr(oper:Operator, name:ID, expr:Expression) : NamedExpression = {
-    Alias(mimirExprToSparkExpr(oper,expr),name.id)()
+  def mimirExprToSparkNamedExpr(inSchema:Seq[(ID,Type)], name:ID, expr:Expression) : NamedExpression = {
+    Alias(mimirExprToSparkExpr(inSchema,expr),name.id)()
   }
   
-  def mimirAggFunctionToSparkNamedExpr(oper:Operator, aggr:AggFunction) : NamedExpression = {
+  def mimirAggFunctionToSparkNamedExpr(inSchema:Seq[(ID,Type)], aggr:AggFunction) : NamedExpression = {
     Alias(AggregateExpression(
       aggr.function.id match {
         case "count" => 
           aggr.args match {
             case Seq() => Count(Seq(Literal(1)))
-            case _ => Count(aggr.args.map(mimirExprToSparkExpr(oper,_)))
+            case _ => Count(aggr.args.map(mimirExprToSparkExpr(inSchema,_)))
           }
         case "avg" => {
-          Average(mimirExprToSparkExpr(oper,aggr.args.head))
+          Average(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "sum" => {
-          Sum(mimirExprToSparkExpr(oper,aggr.args.head))
+          Sum(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "stddev" => {
-          StddevSamp(mimirExprToSparkExpr(oper,aggr.args.head))
+          StddevSamp(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "first" => {
-          First(mimirExprToSparkExpr(oper,aggr.args.head),mimirExprToSparkExpr(oper,BoolPrimitive(true)))
+          First(mimirExprToSparkExpr(inSchema,aggr.args.head),mimirExprToSparkExpr(inSchema,BoolPrimitive(true)))
         }
         case "max" => {
-          Max(mimirExprToSparkExpr(oper,aggr.args.head))
+          Max(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "min" => {
-          Min(mimirExprToSparkExpr(oper,aggr.args.head))
+          Min(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "group_and" => {
-          GroupAnd(mimirExprToSparkExpr(oper,aggr.args.head))
+          GroupAnd(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "group_or" => {
-          GroupOr(mimirExprToSparkExpr(oper,aggr.args.head))
+          GroupOr(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "group_bitwise_or" => {
-          GroupBitwiseOr(mimirExprToSparkExpr(oper,aggr.args.head))
+          GroupBitwiseOr(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "group_bitwise_and" => {
-          GroupBitwiseAnd(mimirExprToSparkExpr(oper,aggr.args.head))
+          GroupBitwiseAnd(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case "json_group_array" => {
-          JsonGroupArray(mimirExprToSparkExpr(oper,aggr.args.head))
+          JsonGroupArray(mimirExprToSparkExpr(inSchema,aggr.args.head))
           //TODO: when we add TArray() type we can use this
-          //CollectList(mimirExprToSparkExpr(oper,aggr.args.head))
+          //CollectList(mimirExprToSparkExpr(inSchema,aggr.args.head))
         }
         case function => {
           val fi = MimirSpark.get.sparkSession.sessionState.catalog.lookupFunctionInfo(FunctionIdentifier(function.toLowerCase()))
-          val sparkInputs = aggr.args.map(inp => mimirExprToSparkExpr(oper, inp))
+          val sparkInputs = aggr.args.map(inp => mimirExprToSparkExpr(inSchema, inp))
           val constructorTypes = aggr.args.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
           Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
                            .asInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction]
@@ -590,19 +645,19 @@ class RAToSpark(db: mimir.Database)
   }
   
   
-  def mimirExprToSparkExpr(oper:Operator, expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirExprToSparkExpr(inSchema:Seq[(ID,Type)], expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
     expr match {
       case primitive : PrimitiveValue => {
         RAToSpark.mimirPrimitiveToSparkPrimitive(primitive)
       }
       case cmp@Comparison(op,lhs,rhs) => {
-        mimirComparisonToSparkComparison(oper, cmp)
+        mimirComparisonToSparkComparison(inSchema, cmp)
       }
       case arith@Arithmetic(op,lhs,rhs) => {
-        mimirArithmeticToSparkArithmetic(oper, arith)
+        mimirArithmeticToSparkArithmetic(inSchema, arith)
       }
       case cnd@Conditional(condition,thenClause,elseClause) => {
-        mimirConditionalToSparkConditional(oper, cnd)
+        mimirConditionalToSparkConditional(inSchema, cnd)
       }
       case Var(name) if name.equals("ROWID") => {
         UnresolvedAttribute.quoted(name.id)
@@ -614,40 +669,40 @@ class RAToSpark(db: mimir.Database)
         UnresolvedAttribute("ROWID")
       }
       case func@Function(_,_) => {
-        mimirFunctionToSparkFunction(oper, func)
+        mimirFunctionToSparkFunction(inSchema, func)
       }
       case CastExpression(expr, t) => {
-        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(oper,expr), RAToSpark.getSparkType(t), None)
+        org.apache.spark.sql.catalyst.expressions.Cast(mimirExprToSparkExpr(inSchema,expr), RAToSpark.getSparkType(t), None)
       }
       case BestGuess(model, idx, args, hints) => {
         val name = model.name
         //logger.debug(s"-------------------Translate BestGuess VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
-       BestGuessUDF(oper, model, idx, args.map(arg => mimirExprToSparkExpr(oper,arg)), hints.map(hint => mimirExprToSparkExpr(oper,hint))).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
+       BestGuessUDF(inSchema, model, idx, args.map(arg => mimirExprToSparkExpr(inSchema,arg)), hints.map(hint => mimirExprToSparkExpr(inSchema,hint))).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(inSchema,StringPrimitive(name)) +: mimirExprToSparkExpr(inSchema,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(inSchema,_)) ++ hints.map(mimirExprToSparkExpr(inSchema,_))), true )
       }
       case IsAcknowledged(model, idx, args) => {
         val name = model.name
         //logger.debug(s"-------------------Translate IsAcknoledged VGTerm($name, $idx, (${args.mkString(",")}))")
-        AckedUDF(oper, model, idx, args.map(arg => mimirExprToSparkExpr(oper,arg))).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ), true )
+        AckedUDF(inSchema, model, idx, args.map(arg => mimirExprToSparkExpr(inSchema,arg))).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_IS_ACKED, mimirExprToSparkExpr(inSchema,StringPrimitive(name)) +: mimirExprToSparkExpr(inSchema,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(inSchema,_)) ), true )
       }
       case Sampler(model, idx, args, hints, seed) => {
-        SampleUDF(oper, model, idx, seed, args.map(arg => mimirExprToSparkExpr(oper,arg)), hints.map(hint => mimirExprToSparkExpr(oper,hint))).getUDF
+        SampleUDF(inSchema, model, idx, seed, args.map(arg => mimirExprToSparkExpr(inSchema,arg)), hints.map(hint => mimirExprToSparkExpr(inSchema,hint))).getUDF
       }
       case VGTerm(name, idx, args, hints) => { //default to best guess
         //logger.debug(s"-------------------Translate VGTerm($name, $idx, (${args.mkString(",")}), (${hints.mkString(",")}))")
         val model = db.models.get(name)
-        BestGuessUDF(oper, model, idx, args.map(arg => mimirExprToSparkExpr(oper,arg)), hints.map(hint => mimirExprToSparkExpr(oper,hint))).getUDF
-        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(oper,StringPrimitive(name)) +: mimirExprToSparkExpr(oper,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(oper,_)) ++ hints.map(mimirExprToSparkExpr(oper,_))), true )
+        BestGuessUDF(inSchema, model, idx, args.map(arg => mimirExprToSparkExpr(inSchema,arg)), hints.map(hint => mimirExprToSparkExpr(inSchema,hint))).getUDF
+        //UnresolvedFunction(mimir.ctables.CTables.FN_BEST_GUESS, mimirExprToSparkExpr(inSchema,StringPrimitive(name)) +: mimirExprToSparkExpr(inSchema,IntPrimitive(idx)) +: (args.map(mimirExprToSparkExpr(inSchema,_)) ++ hints.map(mimirExprToSparkExpr(inSchema,_))), true )
       }
       case DataWarning(_, v, _, _, _) => {
-        mimirExprToSparkExpr(oper, v)
+        mimirExprToSparkExpr(inSchema, v)
       }
       case IsNullExpression(iexpr) => {
-        IsNull(mimirExprToSparkExpr(oper,iexpr))
+        IsNull(mimirExprToSparkExpr(inSchema,iexpr))
       }
       case Not(nexpr) => {
-        org.apache.spark.sql.catalyst.expressions.Not(mimirExprToSparkExpr(oper,nexpr))
+        org.apache.spark.sql.catalyst.expressions.Not(mimirExprToSparkExpr(inSchema,nexpr))
       }
       case (JDBCVar(_) | _:Proc) => {
         throw new RAException("Spark doesn't support: "+expr)
@@ -655,61 +710,74 @@ class RAToSpark(db: mimir.Database)
     }
   }
   
-  def mimirComparisonToSparkComparison(oper:Operator, cmp:Comparison) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirComparisonToSparkComparison(inSchema:Seq[(ID,Type)], cmp:Comparison) : org.apache.spark.sql.catalyst.expressions.Expression = {
     cmp.op match {
-      case  Cmp.Eq => EqualTo(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
-      case  Cmp.Neq  => org.apache.spark.sql.catalyst.expressions.Not(EqualTo(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))) 
-      case  Cmp.Gt  => GreaterThan(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
-      case  Cmp.Gte  => GreaterThanOrEqual(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
-      case  Cmp.Lt  => LessThan(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
-      case  Cmp.Lte  => LessThanOrEqual(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs))
-      case  Cmp.Like  => Like(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs)) 
-      case  Cmp.NotLike => org.apache.spark.sql.catalyst.expressions.Not(Like(mimirExprToSparkExpr(oper,cmp.lhs), mimirExprToSparkExpr(oper,cmp.rhs)))
+      case  Cmp.Eq => EqualTo(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))
+      case  Cmp.Neq  => org.apache.spark.sql.catalyst.expressions.Not(EqualTo(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))) 
+      case  Cmp.Gt  => GreaterThan(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))
+      case  Cmp.Gte  => GreaterThanOrEqual(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))
+      case  Cmp.Lt  => LessThan(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))
+      case  Cmp.Lte  => LessThanOrEqual(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))
+      case  Cmp.Like  => Like(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs)) 
+      case  Cmp.NotLike => org.apache.spark.sql.catalyst.expressions.Not(Like(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs)))
       case x => throw new Exception("Invalid operand '"+x+"'")
     }
   }
   
-  def mimirArithmeticToSparkArithmetic(oper:Operator, arith:Arithmetic) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirArithmeticToSparkArithmetic(inSchema:Seq[(ID,Type)], arith:Arithmetic) : org.apache.spark.sql.catalyst.expressions.Expression = {
     arith.op match {
-      case  Arith.Add => Add(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs)) 
-      case  Arith.Sub => Subtract(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs)) 
-      case  Arith.Mult => Multiply(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs)) 
-      case  Arith.Div => Divide(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
-      case  Arith.BitAnd => BitwiseAnd(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
-      case  Arith.BitOr => BitwiseOr(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
-      case  Arith.And => And(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))   
-      case  Arith.Or => Or(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))   
-      case  Arith.ShiftLeft => ShiftLeft(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))
-      case  Arith.ShiftRight => ShiftRight(mimirExprToSparkExpr(oper,arith.lhs),mimirExprToSparkExpr(oper,arith.rhs))  
+      case  Arith.Add => Add(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs)) 
+      case  Arith.Sub => Subtract(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs)) 
+      case  Arith.Mult => Multiply(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs)) 
+      case  Arith.Div => Divide(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs))  
+      case  Arith.BitAnd => BitwiseAnd(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs))  
+      case  Arith.BitOr => BitwiseOr(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs))  
+      case  Arith.And => And(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs))   
+      case  Arith.Or => Or(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs))   
+      case  Arith.ShiftLeft => ShiftLeft(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs))
+      case  Arith.ShiftRight => ShiftRight(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs))  
       case x => throw new Exception("Invalid operand '"+x+"'")
     }
   }
   
-  def mimirConditionalToSparkConditional(oper:Operator, cnd:Conditional) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirConditionalToSparkConditional(inSchema:Seq[(ID,Type)], cnd:Conditional) : org.apache.spark.sql.catalyst.expressions.Expression = {
     cnd match {
       case Conditional(cond, thenClause, elseClause) => {
-        If(mimirExprToSparkExpr(oper,cond),mimirExprToSparkExpr(oper,thenClause),mimirExprToSparkExpr(oper,elseClause))
+        If( 
+          mimirExprToSparkExpr(inSchema,cond),
+          mimirExprToSparkExpr(inSchema,thenClause),
+          mimirExprToSparkExpr(inSchema,elseClause)
+        )
       }
     }
   }
   
-  def mimirFunctionToSparkFunction(oper:Operator, func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirFunctionToSparkFunction(inSchema:Seq[(ID,Type)], func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
     val vgtBGFunc = VGTermFunctions.bestGuessVGTermFn
     func.op match {
       case ID("random") => {
         Randn(1L)
       }
       case ID("year") => {
-        org.apache.spark.sql.catalyst.expressions.Year(mimirExprToSparkExpr(oper,func.params.head))
+        org.apache.spark.sql.catalyst.expressions.Year(
+          mimirExprToSparkExpr(inSchema,func.params.head))
       }
       case ID("second") => {
-        org.apache.spark.sql.catalyst.expressions.Second(mimirExprToSparkExpr(oper,func.params.head))
+        org.apache.spark.sql.catalyst.expressions.Second(
+          mimirExprToSparkExpr(inSchema,func.params.head))
       }
       case `vgtBGFunc` => {
         throw new Exception(s"Function Translation not implemented $vgtBGFunc(${func.params.mkString(",")})")
       }
       case ID(name) => {
-        FunctionUDF(oper, name, db.functions.get(func.op), func.params.map(arg => mimirExprToSparkExpr(oper,arg)), func.params.map(arg => db.typechecker.typeOf(arg, oper))).getUDF
+        val schemaMap = inSchema.toMap
+        FunctionUDF(
+          inSchema, 
+          name, 
+          db.functions.get(func.op), 
+          func.params.map { arg => mimirExprToSparkExpr(inSchema,arg) }, 
+          func.params.map { arg => db.typechecker.typeOf(arg, scope = schemaMap(_)) }
+        ).getUDF
       }
     }
   }

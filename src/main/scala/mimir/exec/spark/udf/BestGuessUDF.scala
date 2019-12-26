@@ -9,7 +9,7 @@ import mimir.exec.spark._
 import org.apache.spark.sql.catalyst.expressions.KnownNotNull
 import org.apache.spark.sql.catalyst.expressions.Literal
 
-case class BestGuessUDF(oper:Operator, model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
+case class BestGuessUDF(inSchema:Seq[(ID,Type)], model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
   val sparkVarType = RAToSpark.getSparkType(model.varType(idx, model.argTypes(idx)))
   val (sparkArgsArgs,sparkArgsArgTypes) = args.zip(model.argTypes(idx)).toList.toSeq.map {
     case (Literal(null,_), _) => None

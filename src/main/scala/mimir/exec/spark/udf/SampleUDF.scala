@@ -6,7 +6,7 @@ import mimir.algebra._
 import mimir.models._
 import mimir.exec.spark._
 
-case class SampleUDF(oper:Operator, model:Model, idx:Int, seed:Expression, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
+case class SampleUDF(inSchema:Seq[(ID,Type)], model:Model, idx:Int, seed:Expression, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression], hints:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
   val sparkVarType = RAToSpark.getSparkType(model.varType(idx, model.argTypes(idx)))
   val sparkArgs = (args ++ hints).toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => RAToSpark.getSparkType(arg)) ++ model.hintTypes(idx).map(hint => RAToSpark.getSparkType(hint))).toList.toSeq

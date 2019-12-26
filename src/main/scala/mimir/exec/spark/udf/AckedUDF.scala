@@ -7,7 +7,7 @@ import mimir.algebra._
 import mimir.models._
 import mimir.exec.spark._
 
-case class AckedUDF(oper:Operator, model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
+case class AckedUDF(inSchema:Seq[(ID,Type)], model:Model, idx:Int, args:Seq[org.apache.spark.sql.catalyst.expressions.Expression]) extends MimirUDF {
   val sparkArgs = args.toList.toSeq
   val sparkArgTypes = (model.argTypes(idx).map(arg => RAToSpark.getSparkType(arg))).toList.toSeq
   def extractArgs(args:Seq[Any]) : Seq[PrimitiveValue] = {
