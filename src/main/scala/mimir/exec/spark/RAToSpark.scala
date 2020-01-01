@@ -44,6 +44,8 @@ import org.apache.spark.sql.catalyst.analysis.{
   UnresolvedStar
 }
 import org.apache.spark.sql.catalyst.expressions.{
+  AttributeSeq,
+  Expression => SparkExpression,
   RowNumber,
   MonotonicallyIncreasingID,
   NamedExpression,
@@ -412,7 +414,7 @@ class RAToSpark(db: mimir.Database)
     new Dataset[Row](sparkSession, plan, RowEncoder(qe.analyzed.schema)) 
   }
   
-  def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[org.apache.spark.sql.catalyst.expressions.Expression], joinType:JoinType): LogicalPlan = {
+  def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[SparkExpression], joinType:JoinType): LogicalPlan = {
     val (lplan, rplan) = ( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
 	  val (lqe, rqe) = (dataset(lplan), dataset(rplan))
 	  
@@ -424,8 +426,8 @@ class RAToSpark(db: mimir.Database)
         case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
             if a.sameRef(b) =>
           org.apache.spark.sql.catalyst.expressions.EqualTo(
-            tjoin.left.resolve(Seq(a.name), MimirSpark.get.sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
-            tjoin.right.resolve(Seq(b.name), MimirSpark.get.sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+            tjoin.left.resolve(Seq(a.name), MimirSpark.get.sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[SparkExpression],
+            tjoin.right.resolve(Seq(b.name), MimirSpark.get.sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[SparkExpression])
       }}
       tjoin.copy(condition = cond)
 	  }
@@ -495,7 +497,7 @@ class RAToSpark(db: mimir.Database)
     org.apache.spark.sql.catalyst.plans.logical.Join(left, right, joined.joinType, conditionExpr)*/ joined
   }
   
-  /*def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[org.apache.spark.sql.catalyst.expressions.Expression], joinType:JoinType) : LogicalPlan = {
+  /*def makeSparkJoin(lhs:Operator, rhs:Operator, condition:Option[SparkExpression], joinType:JoinType) : LogicalPlan = {
     val (lplan, rplan) = ( mimirOpToSparkOp(lhs),mimirOpToSparkOp(rhs))
 	  val logicalPlan:org.apache.spark.sql.catalyst.plans.logical.Join = org.apache.spark.sql.catalyst.plans.logical.Join(lplan, rplan, joinType, condition)
 	  // If left/right have no output set intersection, return the plan.
@@ -513,8 +515,8 @@ class RAToSpark(db: mimir.Database)
       case org.apache.spark.sql.catalyst.expressions.EqualTo(a: AttributeReference, b: AttributeReference)
           if a.sameRef(b) =>
         org.apache.spark.sql.catalyst.expressions.EqualTo(
-          logicalPlan.left.resolve(Seq(a.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression],
-          logicalPlan.right.resolve(Seq(b.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+          logicalPlan.left.resolve(Seq(a.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get,//p(withPlan(logicalPlan.left))('resolve)(a.name).asInstanceOf[SparkExpression],
+          logicalPlan.right.resolve(Seq(b.name), db.backend.asInstanceOf[BackendWithSparkContext].getSparkContext().sparkSession.sessionState.analyzer.resolver).get)//p(withPlan(logicalPlan.right))('resolve)(b.name).asInstanceOf[SparkExpression])
     }}
 
     logicalPlan.copy(condition = cond)
@@ -633,7 +635,7 @@ class RAToSpark(db: mimir.Database)
         case function => {
           val fi = MimirSpark.get.sparkSession.sessionState.catalog.lookupFunctionInfo(FunctionIdentifier(function.toLowerCase()))
           val sparkInputs = aggr.args.map(inp => mimirExprToSparkExpr(inSchema, inp))
-          val constructorTypes = aggr.args.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+          val constructorTypes = aggr.args.map(inp => classOf[SparkExpression])
           Class.forName(fi.getClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
                            .asInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction]
           //throw new Exception("Aggregate Function Translation not implemented '"+function+"'")
@@ -645,7 +647,7 @@ class RAToSpark(db: mimir.Database)
   }
   
   
-  def mimirExprToSparkExpr(inSchema:Seq[(ID,Type)], expr:Expression) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirExprToSparkExpr(inSchema:Seq[(ID,Type)], expr:Expression) : SparkExpression = {
     expr match {
       case primitive : PrimitiveValue => {
         RAToSpark.mimirPrimitiveToSparkPrimitive(primitive)
@@ -710,7 +712,7 @@ class RAToSpark(db: mimir.Database)
     }
   }
   
-  def mimirComparisonToSparkComparison(inSchema:Seq[(ID,Type)], cmp:Comparison) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirComparisonToSparkComparison(inSchema:Seq[(ID,Type)], cmp:Comparison) : SparkExpression = {
     cmp.op match {
       case  Cmp.Eq => EqualTo(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))
       case  Cmp.Neq  => org.apache.spark.sql.catalyst.expressions.Not(EqualTo(mimirExprToSparkExpr(inSchema,cmp.lhs), mimirExprToSparkExpr(inSchema,cmp.rhs))) 
@@ -724,7 +726,7 @@ class RAToSpark(db: mimir.Database)
     }
   }
   
-  def mimirArithmeticToSparkArithmetic(inSchema:Seq[(ID,Type)], arith:Arithmetic) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirArithmeticToSparkArithmetic(inSchema:Seq[(ID,Type)], arith:Arithmetic) : SparkExpression = {
     arith.op match {
       case  Arith.Add => Add(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs)) 
       case  Arith.Sub => Subtract(mimirExprToSparkExpr(inSchema,arith.lhs),mimirExprToSparkExpr(inSchema,arith.rhs)) 
@@ -740,7 +742,7 @@ class RAToSpark(db: mimir.Database)
     }
   }
   
-  def mimirConditionalToSparkConditional(inSchema:Seq[(ID,Type)], cnd:Conditional) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirConditionalToSparkConditional(inSchema:Seq[(ID,Type)], cnd:Conditional) : SparkExpression = {
     cnd match {
       case Conditional(cond, thenClause, elseClause) => {
         If( 
@@ -752,7 +754,7 @@ class RAToSpark(db: mimir.Database)
     }
   }
   
-  def mimirFunctionToSparkFunction(inSchema:Seq[(ID,Type)], func:Function) : org.apache.spark.sql.catalyst.expressions.Expression = {
+  def mimirFunctionToSparkFunction(inSchema:Seq[(ID,Type)], func:Function) : SparkExpression = {
     val vgtBGFunc = VGTermFunctions.bestGuessVGTermFn
     func.op match {
       case ID("random") => {
@@ -780,6 +782,42 @@ class RAToSpark(db: mimir.Database)
         ).getUDF
       }
     }
+  }
+  
+  /**
+   * Resolve [[UnresolvedAttribute]]s in an expression. 
+   *
+   * This code is modeled after like code in Spark's [[Analyzer]], which is incredibly tied
+   * down to LogicalPlans.  **ALL** of the expression optimizer code is only designed to
+   * be used when the expression is part of a LogicalPlan.  This code mirrors code from the
+   * [[Analyzer.ResolveReferences]] rule, except that it takes in a predefined list of 
+   * attributes and binds appropriately.
+   *
+   * It's a little weaker than Spark's version... it'll only resolve attributes by exact match.
+   */
+   def resolveUnresolvedAttributes(e: SparkExpression, a: AttributeSeq): SparkExpression = {
+      if (e.resolved) return e
+      e match {
+        case u @ UnresolvedAttribute(nameParts) =>
+          a.resolve(nameParts, MimirSpark.get.sparkSession.sessionState.analyzer.resolver)
+           .getOrElse { u }
+        case _ => e.mapChildren(resolveUnresolvedAttributes(_, a))
+      }
+    }
+
+  def bindSparkExpressionToTuple(
+    schema:Seq[Attribute], 
+    expression: SparkExpression
+  ): SparkExpression =
+  {
+    val resolvedExpression = 
+      resolveUnresolvedAttributes(expression, AttributeSeq(schema))
+    val boundExpression = 
+      org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference(
+        resolvedExpression, 
+        schema
+      )
+    return boundExpression
   }
 }
 
@@ -947,8 +985,10 @@ object RAToSpark {
     sparkInternal match {
       case null => NullPrimitive()
       case s:UTF8String => StringPrimitive(s.toString())
+      case i:Int => IntPrimitive(i)
       case i:Long => IntPrimitive(i)
       case f:Float => FloatPrimitive(f) 
+      case f:Double => FloatPrimitive(f) 
       case b:Boolean => BoolPrimitive(b) 
       case x => StringPrimitive(x.toString())
     }
@@ -1028,7 +1068,6 @@ object RAToSpark {
       }
     })
   }
-  
 }
 
 

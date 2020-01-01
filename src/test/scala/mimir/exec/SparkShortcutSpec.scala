@@ -39,14 +39,13 @@ class SparkShortcutSpec
 
   def aggregateOne(agg: AggFunction, source:ResultIterator = makeSource()): PrimitiveValue =
   {
-    val (mkEvalAgg, mkTuple) = ComputeAggregate.compile(agg, source, db)
+    val mkEvalAgg = ComputeAggregate.compile(agg, source, db)
     val evalAgg = mkEvalAgg()
 
     for(row <- source){
-      val tuple = 
-          mkTuple.map { case (_, expr) => 
-                          db.interpreter.eval(expr, row.tupleMap) }
-      evalAgg.update(tuple)
+      evalAgg.update(new GenericInternalRow(row.tuple.map { 
+        RAToSpark.mimirPrimitiveToSparkInternalRowValue(_)
+      }.toArray))
     }
     evalAgg.finish()
   }
@@ -102,7 +101,7 @@ class SparkShortcutSpec
           ),
           ID("TOT")
         )
-      ) must beEqualTo(IntPrimitive(2))
+      ).asDouble must beCloseTo(2.0, 2.0)
 
     }
 

@@ -1,14 +1,19 @@
 package mimir.exec.shortcut
 
+
 import scala.collection.mutable.{ 
   Map => MutableMap, 
   Set => MutableSet
 }
 
+import org.apache.spark.sql.catalyst.analysis.TypeCoercion.ImplicitTypeCasts
 import org.apache.spark.sql.catalyst.expressions.{ 
+  JoinedRow,
   GenericInternalRow, 
   Attribute,
-  Expression => SparkExpression
+  Expression => SparkExpression,
+  Literal => SparkLiteral,
+  ImplicitCastInputTypes
 }
 import org.apache.spark.sql.catalyst.expressions.aggregate.{
   DeclarativeAggregate,
@@ -20,6 +25,8 @@ import org.apache.spark.sql.catalog.{
 }
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import mimir.Database
 import mimir.algebra._
 import mimir.exec.result.ResultIterator
@@ -30,7 +37,7 @@ import mimir.exec.spark.{ MimirSpark, RAToSpark }
  */
 sealed trait AggregateEval
 {
-  def update(tuple: Seq[PrimitiveValue])
+  def update(tuple: GenericInternalRow)
   def finish(): PrimitiveValue
 }
 
@@ -39,6 +46,7 @@ sealed trait AggregateEval
  * Utility code for inline execution of aggregates
  */
 object ComputeAggregate
+  extends LazyLogging
 {
   def apply(
     groupby: Seq[ID], 
@@ -48,57 +56,47 @@ object ComputeAggregate
   ): Seq[Seq[PrimitiveValue]] =
   {
     val groups = MutableMap[Seq[PrimitiveValue], Seq[AggregateEval]]()
-    val mkGroup, inputExprs = 
-      aggregates.map { compile(_, input, db) }
-                .unzip
+    val mkGroup = aggregates.map { compile(_, input, db) }
     ???
   }
 
   def compile(agg: AggFunction, input: ResultIterator, db: Database): 
     ( 
-      () => AggregateEval,
-      Seq[(Attribute, Expression)]
+      () => AggregateEval
     ) =
   {
-    val schemaMap = input.tupleSchema.toMap
-    val fields:Seq[Either[(Attribute, Expression), SparkExpression]] = 
-      agg.args.zipWithIndex.map { case (expr, idx) => 
-        val fieldName = ID(s"${agg.alias.id}:$idx")
-        val fieldType = db.typechecker.typeOf(expr, schemaMap(_))
+    val inputSchema = RAToSpark.mimirSchemaToAttributeSeq(input.tupleSchema)
 
-        val attr = RAToSpark.mimirColumnToAttribute(fieldName -> fieldType)
-
-        if(ExpressionUtils.isDataDependent(expr)){ 
-          Left(attr -> expr)
-        } else {
-          Right(RAToSpark.mimirPrimitiveToSparkPrimitive(
-            db.interpreter.eval(expr)
-          ))
-        }
-      }
-
-    val arguments: Seq[SparkExpression] = 
-      fields.map {
-        case Left( (attr, _) ) => attr
-        case Right(expr) => expr
-      }
-
+    val fields:Seq[SparkExpression] = 
+      agg.args
+         .map { expr:Expression => 
+                db.raToSpark.mimirExprToSparkExpr(input.tupleSchema, expr)
+              }
+         .map { expr:SparkExpression =>
+                db.raToSpark.bindSparkExpressionToTuple(inputSchema, expr)
+              }
 
     val aggDefn:AggregateFunction = 
-      MimirSpark.makeAggregate(agg.function, arguments)
+      MimirSpark.makeAggregate(agg.function, fields)
+
 
     val aggregateEval = 
-      aggDefn match { 
+      castAggregateInputs(aggDefn) match { 
         case decl:DeclarativeAggregate => 
         {
+          val updateSchema = inputSchema ++ decl.aggBufferAttributes
           val emptyRow = new GenericInternalRow(Array[Any]())
-          val schema = fields.collect { case Left( (attr, _) ) => attr } ++ 
-                         decl.aggBufferAttributes
+          logger.debug(s"[Before] Initial Values: ${decl.initialValues}")
+          logger.debug(s"[Before] Update Expressions: ${decl.updateExpressions}")
+          logger.debug(s"[Before] Final Expressions: ${decl.evaluateExpression}")
           val updateExpressions = 
-            decl.updateExpressions.map { bindReference(_, schema) }
+            decl.updateExpressions.map { bindReference(_, updateSchema) }
           val finalExpression =
             bindReference(decl.evaluateExpression, decl.aggBufferAttributes)
           val initialValues = decl.initialValues.map { _.eval(emptyRow) }
+          logger.debug(s"[After] Initial Values: $initialValues")
+          logger.debug(s"[After] Update Expressions: $updateExpressions")
+          logger.debug(s"[After] Final Expressions: $finalExpression")
 
           { () => new SparkDeclarativeAggregate(initialValues, updateExpressions, finalExpression) }
         }
@@ -108,19 +106,28 @@ object ComputeAggregate
         }
       }
 
-    val inputExpressions = fields.collect { 
-      case Left( projection ) => projection
-    }
-
     if(agg.distinct){
-      return (
-        { () => new DistinctAggregate(aggregateEval()) },
-        inputExpressions
-      )
+      return { () => new DistinctAggregate(aggregateEval(), fields) }
     } else {
-      return (aggregateEval, inputExpressions)
+      return aggregateEval
     }
 
+  }
+
+  // Borrowed from Spark's TypeCoersion module.  Ugh... stupid lack of proper abstraction.
+  def castAggregateInputs(agg:AggregateFunction): AggregateFunction =
+  {
+    agg match {
+      case e: AggregateFunction with ImplicitCastInputTypes if e.inputTypes.nonEmpty => {
+        val children: Seq[SparkExpression] = 
+          e.children.zip(e.inputTypes).map { case (in, expected) =>
+            ImplicitTypeCasts.implicitCast(in, expected).getOrElse(in)
+          }
+        e.withNewChildren(children)
+         .asInstanceOf[AggregateFunction]
+      }
+      case _ => agg
+    }
   }
 }
 
@@ -140,12 +147,13 @@ class SparkDeclarativeAggregate(
 {
   var buffer = initialValues
 
-  def update(tuple: Seq[PrimitiveValue]) = 
+  def update(tuple: GenericInternalRow) = 
   {
 
-    val record = new GenericInternalRow( (
-      tuple.map { RAToSpark.mimirPrimitiveToSparkInternalRowValue(_) }
-        ++ buffer).toArray )
+    val record = new JoinedRow(
+      tuple, 
+      new GenericInternalRow( buffer.toArray )
+    )
     buffer = updateExpressions.map { _.eval(record) }
   }
   def finish(): PrimitiveValue = 
@@ -173,13 +181,9 @@ class SparkImperativeAggregate(
     row
   }
 
-  def update(tuple: Seq[PrimitiveValue]) = 
+  def update(tuple: GenericInternalRow) = 
   {
-    val inputRecord = new GenericInternalRow(
-      tuple.map { RAToSpark.mimirPrimitiveToSparkInternalRowValue(_) }
-           .toArray
-    )
-    agg.update(buffer, inputRecord)
+    agg.update(buffer, tuple)
   }
   def finish(): PrimitiveValue = 
   {
@@ -193,20 +197,29 @@ class SparkImperativeAggregate(
  * Utility wrapper to allow deduplicated aggregates
  */
 class DistinctAggregate(
-  agg: AggregateEval
+  agg: AggregateEval,
+  key: Seq[SparkExpression]
 )
   extends AggregateEval
+  with LazyLogging
 {
+  val buffer = MutableMap[GenericInternalRow, GenericInternalRow]()
 
-  val buffer = MutableSet[Seq[PrimitiveValue]]()
-
-  def update(tuple: Seq[PrimitiveValue])
+  def update(tuple: GenericInternalRow)
   {
-    buffer.add(tuple)
+    val group = new GenericInternalRow(
+      key.map { _.eval(tuple) }
+         .toArray
+    )
+    logger.debug(s"Distinct Aggregate Add: $tuple -> $group")
+    buffer.put(group,tuple)
   }
   def finish(): PrimitiveValue =
   {
-    for(row <- buffer){ agg.update(row) }
+    for( (_, row) <- buffer){ 
+      logger.debug(s"Distinct Aggregate Process: $row")
+      agg.update(row) 
+    }
     return agg.finish()
   }
 }
