@@ -30,13 +30,13 @@ abstract class CompileMode[IteratorT <: ResultIterator]
   def wrap(db: Database, results: ResultIterator, query: Operator, meta: MetadataT): IteratorT
 
 
-  def apply(db: Database, oper: Operator, rootIteratorGen:(Operator)=>(Seq[(ID,Type)],ResultIterator)): IteratorT =
+  def apply(db: Database, oper: Operator): IteratorT =
   {
     val (rewritten, relevantColumnNames, meta) =
       rewrite(db, oper)
 
     val results = 
-      db.compiler.deploy(rewritten, relevantColumnNames, rootIteratorGen)
+      db.compiler.deploy(rewritten, relevantColumnNames)
     wrap(db, results, rewritten, meta)
   }
 }

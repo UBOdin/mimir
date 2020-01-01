@@ -150,7 +150,7 @@ case class Database(
    */
   final def query[T, R <:ResultIterator](oper: Operator, mode: CompileMode[R])(handler: R => T): T =
   {
-    val iterator = mode(this, views.rebuildAdaptiveViews(oper), compiler.sparkBackendRootIterator)
+    val iterator = mode(this, views.rebuildAdaptiveViews(oper))
     try {
       val ret = handler(iterator)
 

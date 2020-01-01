@@ -9,11 +9,11 @@ import com.github.nscala_time.time.Imports._
 import org.apache.spark.sql.{Dataset, DataFrame, SaveMode}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-
 import mimir.Database
 import mimir.algebra.Union
 import mimir.algebra._
 import mimir.ctables._
+
 import mimir.optimizer._
 import mimir.optimizer.operator._
 import mimir.optimizer.expression._
@@ -22,7 +22,8 @@ import mimir.exec.result._
 import mimir.exec.mode._
 import mimir.exec.uncertainty._
 import mimir.exec.spark._
-import mimir.util._
+import mimir.exec.shortcut.ShortcutCompiler
+import mimir.util.{ ExperimentalOptions, Timer }
 import sparsity.select.SelectBody
 
 class Compiler(db: Database) extends LazyLogging {
@@ -53,17 +54,9 @@ class Compiler(db: Database) extends LazyLogging {
 
   val rnd = new Random
 
-  /**
-   * Perform a full end-end compilation pass producing best guess results.  
-   * Return an iterator over the result set.  
-   */
-  def compile[R <:ResultIterator](query: Operator, mode: CompileMode[R], rootIteratorGen:(Operator)=>(Seq[(ID,Type)],ResultIterator) ): R =
-    mode(db, query, rootIteratorGen)
-
   def deploy(
     compiledOper: Operator, 
-    outputCols: Seq[ID],
-    rootIteratorGen:(Operator)=>(Seq[(ID,Type)],ResultIterator)
+    outputCols: Seq[ID]
   ): ResultIterator =
   {
     var oper = compiledOper
@@ -90,71 +83,33 @@ class Compiler(db: Database) extends LazyLogging {
         .flatMap { ExpressionUtils.getColumns(_) }
         .toSet
 
-    val (agg: Option[(Seq[Var], Seq[AggFunction])], unionClauses: Seq[Operator]) = 
-      DecomposeAggregates(oper, db.typechecker) match {
-        case Aggregate(gbCols, aggCols, src) => 
-          (Some((gbCols, aggCols)), OperatorUtils.extractUnionClauses(src))
-        case _ => 
-          (None, OperatorUtils.extractUnionClauses(oper))
+    // Make the set of columns we're interested in explicitly part of the query
+    oper = oper.projectByID( requiredColumns.toSeq:_* )
+
+    // One last round of optimization
+    oper = optimize(oper)
+
+    // Check if the query is eligible for shortcutting
+    val (rootIteratorSchema:Seq[(ID,Type)] @unchecked, rootIterator:ResultIterator) = 
+      if(ExperimentalOptions.isEnabled("ALLOW-SPARK-SHORTCUT") &&
+            ShortcutCompiler.shouldUseShortcut(db, oper))
+      { // Shortcutting is allowed.  Delegate to the shortcut compiler
+        (
+          db.typechecker.schemaOf(oper):Seq[(ID,Type)],
+          ShortcutCompiler(db, oper )
+        )
+      } else { // no shortcutting allowed.  Go direct to spark!
+        sparkBackendRootIterator( oper )
       }
-      
-    if(unionClauses.size > 1 && ExperimentalOptions.isEnabled("AVOID-IN-SITU-UNIONS")){
 
-      val requiredColumnsInOrder = 
-        agg match {
-          case None => 
-            requiredColumns.toSeq
-          case Some((gbCols, aggFunctions)) => 
-            gbCols.map { _.name } ++ 
-            aggFunctions
-              .flatMap { _.args }
-              .flatMap { ExpressionUtils.getColumns(_) }
-              .toSet.toSeq
-        }
-      val sourceColumnTypes = db.typechecker.schemaOf(unionClauses(0)).toMap
-
-
-      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder, rootIteratorGen) }
-      val jointIterator = new UnionResultIterator(nested.iterator)
-
-      val aggregateIterator =
-        agg match {
-          case None => 
-            jointIterator
-          case Some((gbCols, aggFunctions)) => 
-            new AggregateResultIterator(
-              gbCols, 
-              aggFunctions,
-              requiredColumnsInOrder.map { col => (col, sourceColumnTypes(col)) },
-              jointIterator,
-              db
-            )
-        }
-      return new ProjectionResultIterator(
-        outputCols.map( projections(_) ),
-        annotationCols.map( projections(_) ).toSeq,
-        db.typechecker.schemaOf(oper),
-        aggregateIterator, 
-        db
-      )
-
-    } else {
-      // Make the set of columns we're interested in explicitly part of the query
-      oper = oper.projectByID( requiredColumns.toSeq:_* )
-
-      val (schema, rootIterator) = 
-        rootIteratorGen( optimize(oper) )
-        
-      logger.info(s"PROJECTIONS: $projections")
-
-      new ProjectionResultIterator(
-        outputCols.map( projections(_) ),
-        annotationCols.map( projections(_) ).toSeq,
-        schema,
-        rootIterator,
-        db
-      )
-    }
+    logger.info(s"PROJECTIONS: $projections")
+    return new ProjectionResultIterator(
+      outputCols.map( projections(_) ),
+      annotationCols.map( projections(_) ).toSeq,
+      rootIteratorSchema,
+      rootIterator,
+      db
+    )
   }
   
   def sparkBackendRootIterator(oper:Operator) : (Seq[(ID, Type)], ResultIterator) = {

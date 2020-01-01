@@ -40,13 +40,15 @@ object ExperimentalOptions {
   /**
    * For unit tests ONLY: Execute a block of code with options enabled
    */
-  def withEnabled[A](options: GenTraversableOnce[String], cmd: (() => A)): A =
+  def withEnabled[A](options: GenTraversableOnce[String])(cmd: => A): A =
   {
     val optionStack = enabled
-    enable(options)
-    val ret = cmd()
-    enabled = optionStack
-    ret
+    try {
+      enable(options)
+      return cmd
+    } finally {
+      enabled = optionStack
+    }
   }
 
   /**

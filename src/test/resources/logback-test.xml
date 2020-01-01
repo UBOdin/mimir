@@ -43,8 +43,9 @@
   <logger name="mimir.exec.result.AggregateResultIterator"         level="WARN"/>
   <logger name="mimir.exec.result.JDBCResultIterator"              level="WARN"/>
   <logger name="mimir.exec.spark.MimirSpark"                       level="WARN"/>
-  <logger name="mimir.exec.shortcut.ComputeAggregate$"              level="TRACE"/>
-  <logger name="mimir.exec.shortcut.DistinctAggregate"              level="TRACE"/>
+  <logger name="mimir.exec.shortcut.ShortcutCompiler$"             level="TRACE"/>
+  <logger name="mimir.exec.shortcut.ComputeAggregate$"             level="WARN"/>
+  <logger name="mimir.exec.shortcut.DistinctAggregate"             level="WARN"/>
 
   <!--+++++++++++++++++++++++  Lenses  ++++++++++++++++++++++++-->
   <logger name="mimir.lenses.BestGuessCache"                       level="WARN"/>

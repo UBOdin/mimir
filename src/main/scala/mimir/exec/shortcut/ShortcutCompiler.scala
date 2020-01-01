@@ -34,6 +34,8 @@ package mimir.exec.shortcut
  *     of writing this comment, we don't have a sufficient need to justify.
  */
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import mimir.Database
 import mimir.algebra._
 import mimir.data._
@@ -43,25 +45,42 @@ import mimir.exec.spark.GetSparkStatistics
 import mimir.util.ExperimentalOptions
 
 object ShortcutCompiler
+  extends LazyLogging
 {
   val DEFAULT_THRESHOLD:Long = 100*1024*1024 // 100 MB
   
   /**
-   * A simple heuristic analysis of 
+   * A simple heuristic analysis of whether or not we should enable shortcutting.
+   *
+   * The rules are:
+   *  - Any joins immediately disqualify shortcuts
+   *  - The number of bytes required to store the output must be lower than the threshold
+   *  - If the query has any aggregates, the output of each aggregate must be
+   *    smaller than the prescribed threshold.
    */
   def shouldUseShortcut(db: Database, query: Operator): Boolean = 
   {
-    if(ExperimentalOptions.isEnabled("ALLOW-SPARK-SHORTCUT")){
-      val thresholdInBytes = 
-        Option(
-          System.getenv("MIMIR_SHORTCUT_THRESHOLD")
-        ).map { _.toLong }
-         .getOrElse(DEFAULT_THRESHOLD)
-
-      return thresholdInBytes >= GetSparkStatistics(db, query).sizeInBytes;
-    } else {
-      false
+    print(s"Checking for shortcut in:\n$query")
+    val thresholdInBytes = 
+      Option(
+        System.getenv("MIMIR_SHORTCUT_THRESHOLD")
+      ).map { _.toLong }
+       .getOrElse(DEFAULT_THRESHOLD)
+    logger.debug(s"Shortcut threshold = $thresholdInBytes")
+    def checkAggregatesAndJoins(op: Operator): Boolean = {
+      (op match {
+        case a:Aggregate => 
+          (thresholdInBytes >= GetSparkStatistics(db, a).sizeInBytes)
+        case _:Join => false
+        case _:LeftOuterJoin => false
+        case _ => true
+      }) && op.children.forall { checkAggregatesAndJoins(_) }
     }
+
+    return (
+       (thresholdInBytes >= GetSparkStatistics(db, query).sizeInBytes)
+       && checkAggregatesAndJoins(query)
+    )
   }
 
   def apply(db: Database, query: Operator): ResultIterator =
@@ -79,6 +98,7 @@ object ShortcutCompiler
     selection: Seq[Expression]
   ): ResultIterator =
   {
+    print("COMPILER")
     def assembleFlatMap(ret: ResultIterator): ResultIterator = {
       val eval = assembleEval(db, ret)
 
@@ -190,7 +210,18 @@ object ShortcutCompiler
       case View(_, source, _) => compile(db, source, projection, selection)
       case AdaptiveView(_, _, source, _) => compile(db, source, projection, selection)
 
-      case Aggregate(_, _, _) => ???
+      case Aggregate(groupBy, aggregates, source) => {
+        val sourceIterator = apply(db, source)
+        new HardTableIterator(
+          db.typechecker.schemaOf(query),
+          ComputeAggregate(
+            groupBy.map { _.name },
+            aggregates,
+            sourceIterator,
+            db
+          )
+        )
+      }
       case Join(_, _) => ???
       case LeftOuterJoin(_, _, _) => ???
 

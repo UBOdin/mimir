@@ -29,7 +29,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import mimir.Database
 import mimir.algebra._
-import mimir.exec.result.ResultIterator
+import mimir.exec.result.{ ResultIterator, Row }
 import mimir.exec.spark.{ MimirSpark, RAToSpark }
 
 /**
@@ -49,15 +49,38 @@ object ComputeAggregate
   extends LazyLogging
 {
   def apply(
-    groupby: Seq[ID], 
+    groupBy: Seq[ID], 
     aggregates: Seq[AggFunction], 
     input: ResultIterator,
     db: Database
   ): Seq[Seq[PrimitiveValue]] =
   {
-    val groups = MutableMap[Seq[PrimitiveValue], Seq[AggregateEval]]()
-    val mkGroup = aggregates.map { compile(_, input, db) }
-    ???
+    val buffer = MutableMap[Seq[PrimitiveValue], Seq[AggregateEval]]()
+    val mkGroupState = aggregates.map { compile(_, input, db) }
+    val inputFields = input.schema.map { _._1 }
+    val groupIndices = groupBy.map { inputFields.indexOf(_) }
+    if(groupIndices.exists { _ < 0 }){ 
+      throw new RAException(
+        s"Invalid groupBy attributes: [${groupBy.mkString(",")}] (in [${inputFields.mkString(",")}])"
+      )
+    }
+    val getGroup:(Row => Seq[PrimitiveValue]) = row => groupIndices.map { row(_) }
+
+    for(row <- input){
+      val group = getGroup(row)
+      if(!buffer.contains(group)){
+        buffer.put(group, mkGroupState.map { _() } )
+      }
+      val tuple = new GenericInternalRow(
+        row.tuple.map { 
+          RAToSpark.mimirPrimitiveToSparkInternalRowValue(_)
+        }.toArray
+      )
+      buffer(group).map { _.update(tuple) }
+    }
+    buffer.map { case (group, results) => 
+      group ++ results.map { _.finish() }
+    }.toSeq
   }
 
   def compile(agg: AggFunction, input: ResultIterator, db: Database): 
