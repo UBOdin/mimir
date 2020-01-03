@@ -184,6 +184,9 @@ libraryDependencies ++= Seq(
   ("com.google.api-client"   %   "google-api-client"             % "1.22.0").exclude("com.google.guava", "guava-jdk5"),
   "com.google.oauth-client"  %   "google-oauth-client-jetty"     % "1.22.0",
   "com.google.apis"          %   "google-api-services-sheets"    % "v4-rev18-1.22.0",
+  "org.datasyslab"           %   "geospark"                      % "1.2.0" % "provided",
+  "org.datasyslab"           %   "geospark-sql_2.3"                  % "1.2.0",
+  
   
   //////////////////////// Jung ////////////////////////
   // General purpose graph manipulation library
