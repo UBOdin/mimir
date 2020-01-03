@@ -76,85 +76,21 @@ class Compiler(db: Database) extends LazyLogging {
     val schema = db.typechecker.schemaOf(oper)
     logger.debug(s"SCHEMA: ${schema.mkString(", ")}")
 
-    // Strip off the final projection operator
-    val extracted = OperatorUtils.extractProjections(oper)
-    val projections = extracted._1.map { col => (col.name -> col) }.toMap
-    oper            = extracted._2
-
+    val (rootIteratorSchema, rootIterator) = 
+      rootIteratorGen( oper )
+    
     val annotationCols =
-      projections.keys.filter( !isAnOutputCol(_) )
+      oper.columnNames
+          .filter { !isAnOutputCol(_) }
+    // Use a projection result iterator to hide the annotation columns
+    return new ProjectionResultIterator(
+      outputCols.map { col => ProjectArg(col, Var(col)) },
+      annotationCols.map { col => ProjectArg(col, Var(col)) },
+      rootIteratorSchema, 
+      rootIterator,
+      db
+    )
 
-    val requiredColumns = 
-      projections.values
-        .map(_.expression)
-        .flatMap { ExpressionUtils.getColumns(_) }
-        .toSet
-
-    val (agg: Option[(Seq[Var], Seq[AggFunction])], unionClauses: Seq[Operator]) = 
-      DecomposeAggregates(oper, db.typechecker) match {
-        case Aggregate(gbCols, aggCols, src) => 
-          (Some((gbCols, aggCols)), OperatorUtils.extractUnionClauses(src))
-        case _ => 
-          (None, OperatorUtils.extractUnionClauses(oper))
-      }
-      
-    if(unionClauses.size > 1 && ExperimentalOptions.isEnabled("AVOID-IN-SITU-UNIONS")){
-
-      val requiredColumnsInOrder = 
-        agg match {
-          case None => 
-            requiredColumns.toSeq
-          case Some((gbCols, aggFunctions)) => 
-            gbCols.map { _.name } ++ 
-            aggFunctions
-              .flatMap { _.args }
-              .flatMap { ExpressionUtils.getColumns(_) }
-              .toSet.toSeq
-        }
-      val sourceColumnTypes = db.typechecker.schemaOf(unionClauses(0)).toMap
-
-
-      val nested = unionClauses.map { deploy(_, requiredColumnsInOrder, rootIteratorGen) }
-      val jointIterator = new UnionResultIterator(nested.iterator)
-
-      val aggregateIterator =
-        agg match {
-          case None => 
-            jointIterator
-          case Some((gbCols, aggFunctions)) => 
-            new AggregateResultIterator(
-              gbCols, 
-              aggFunctions,
-              requiredColumnsInOrder.map { col => (col, sourceColumnTypes(col)) },
-              jointIterator,
-              db
-            )
-        }
-      return new ProjectionResultIterator(
-        outputCols.map( projections(_) ),
-        annotationCols.map( projections(_) ).toSeq,
-        db.typechecker.schemaOf(oper),
-        aggregateIterator, 
-        db
-      )
-
-    } else {
-      // Make the set of columns we're interested in explicitly part of the query
-      oper = oper.projectByID( requiredColumns.toSeq:_* )
-
-      val (schema, rootIterator) = 
-        rootIteratorGen( optimize(oper) )
-        
-      logger.info(s"PROJECTIONS: $projections")
-
-      new ProjectionResultIterator(
-        outputCols.map( projections(_) ),
-        annotationCols.map( projections(_) ).toSeq,
-        schema,
-        rootIterator,
-        db
-      )
-    }
   }
   
   def sparkBackendRootIterator(oper:Operator) : (Seq[(ID, Type)], ResultIterator) = {
