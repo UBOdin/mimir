@@ -42,6 +42,7 @@ import mimir.{Database, MimirConfig}
 import mimir.util.{ExperimentalOptions, SparkUtils, HadoopUtils}
 import org.datasyslab.geospark.serde.GeoSparkKryoRegistrator
 import org.datasyslab.geosparksql.utils.GeoSparkSQLRegistrator
+import org.apache.spark.sql.geosparksql.expressions.ST_Point
 
 object MimirSpark
   extends LazyLogging
@@ -240,17 +241,39 @@ object MimirSpark
            .listFunctions("mimir")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
           val fInfo = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
+          val isGeosparkFunction = fidentifier.toString().startsWith("st_")
           if(fInfo != null){
             val fClassName = fInfo.getClassName
             if(fClassName != null && !fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
               logger.debug("registering spark function: " + fidentifier.funcName)
               SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
-                val sparkInputs = inputs.map(inp => Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
-                val sparkInternal = inputs.map(inp => RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
+                val sparkInputs = inputs.map(inp => 
+                  if(isGeosparkFunction){
+                    Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParamGeo(inp))
+                  }
+                  else{
+                    Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParam(inp))
+                  })
+                val sparkInternal = inputs.map(inp => 
+                  if(isGeosparkFunction){
+                    RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParamGeo(inp)
+                  }
+                  else {
+                    RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParam(inp)
+                  })
                 val sparkRow = InternalRow(sparkInternal:_*)
-                val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-                val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
+                val sparkFunc = if(isGeosparkFunction){
+                  val constructors = Class.forName(fClassName.replaceAll("\\$", "")).getDeclaredConstructors
+                  val constructor = constructors.head
+                  constructor.setAccessible(true)
+                  constructor.newInstance(sparkInputs)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
+                }
+                else{
+                  val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
                                   .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
+                }
                 val sparkRes = sparkFunc.eval(sparkRow)
                 sparkFunc.dataType match {
                     case LongType => IntPrimitive(sparkRes.asInstanceOf[Long])
@@ -270,10 +293,20 @@ object MimirSpark
                   } 
               }, 
               (inputTypes) => {
-                val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
-                val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-                RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
-                .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+                if(isGeosparkFunction){
+                  val inputs = inputTypes.map(inp => Literal(RAToSpark.getNativeGeo(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  val constructors = Class.forName(fClassName.replaceAll("\\$", "")).getDeclaredConstructors
+                  val constructor = constructors.head
+                  constructor.setAccessible(true)
+                  RAToSpark.getMimirType( constructor.newInstance(inputs)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+                }
+                else{
+                  val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+                }
               })
             } 
           }

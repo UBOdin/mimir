@@ -31,31 +31,36 @@ object GeoSparkSpec
   {
     loadCSV(
       targetTable = "ADDR",
-      sourceFile = "test/data/geo.csv", 
-      inferTypes = false, 
+      sourceFile = "test/data/geo_lat_lng.csv", 
+      inferTypes = true, 
       detectHeaders =true
     )
   }
   
-  "The Geocoding Lens" should {
+  "The Geospark functions" should {
     sequential 
     "Be able to do distance" >> {
  
-      update("""
-        CREATE LENS GEO_LENS_GOOGLE 
-          AS SELECT * FROM ADDR
-        WITH GEOCODE(HOUSE_NUMBER(STRNUMBER),STREET(STRNAME),CITY(CITY),STATE(STATE),GEOCODER(GOOGLE))
-      """);
-
-      val result = query("""
-        SELECT ST_Point(LATITUDE, LONGITUDE ) AS pointshape FROM GEO_LENS_GOOGLE
+      
+      /*val result = query("""
+        SELECT ST_Centroid(ST_PolygonFromEnvelope(1.0,100.0,1000.0,1100.0)) centroid FROM ADDR
+      """)(results => results.toList.map( row =>  { 
+        (
+          row
+        )
+       }))
+     println(result.mkString("\n"))*/
+       
+       
+      val result2 = query("""
+        SELECT ST_Point(ADDR.LATITUDE, ADDR.LONGITUDE) AS pointshape FROM ADDR
       """)(results => results.toList.map( row =>  { 
         (
           row
         )
        }))
        
-       println(result.mkString("\n"))
+       //println(result2.mkString("\n"))
        
        ok
     }
