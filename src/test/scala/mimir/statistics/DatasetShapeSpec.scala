@@ -3,9 +3,10 @@ package mimir.statistics
 import org.specs2.mutable._
 import org.specs2.specification._
 import java.io.File
-import mimir.algebra.{Var, StringPrimitive, ID}
+import mimir.algebra._
 import mimir.test._
 import mimir.util._
+import mimir.statistics.facet._
 
 object DatasetShapeSpec
   extends SQLTestSpecification("DatasetShapeSpec")
@@ -21,6 +22,16 @@ object DatasetShapeSpec
     db.loader.loadTable(
       targetTable = Some(ID("Z_BAD")), 
       sourceFile = "test/r_test/z_bad.csv",
+      datasourceErrors = true
+    )
+    db.loader.loadTable(
+      targetTable = Some(ID("COD_A")),
+      sourceFile = "test/NYC_CoD/New_York_City_Leading_Causes_of_Death_12_11_2018.csv",
+      datasourceErrors = true
+    )
+    db.loader.loadTable(
+      targetTable = Some(ID("COD_B")),
+      sourceFile = "test/NYC_CoD/New_York_City_Leading_Causes_of_Death_12_18_2018.csv",
       datasourceErrors = true
     )
   }
@@ -74,6 +85,31 @@ object DatasetShapeSpec
         SELECT * FROM Z_BAD_S
       """)(_.toList.map(_.tuple))
       result must not be empty
+    }
+
+    "Detect Nulls and Ranges Correctly" >> {
+
+      val retA = DatasetShape.detect(db, db.table("COD_A"))
+      retA.map { _.description } must contain("DEATH_RATE has no more than 35.2% nulls")
+      retA must contain(new NonNullable(ID("YEAR")))
+      retA must contain(new DrawnFromDomain(ID("SEX"), TString(), Set(
+        StringPrimitive("M"),
+        StringPrimitive("F")
+      )))
+
+      // DEATHS should, in principle also contain nulls, but Spark is happy to cast '.' as a 0.
+
+      val retB = DatasetShape.detect(db, db.table("COD_B"))
+      retB.map { _.description } must not contain("DEATHS has no nulls")  // 2015, 2016 data uses ' ' for this column.
+      retB must contain(
+        new DrawnFromDomain(ID("SEX"), TString(), Set(
+          StringPrimitive("Female"),
+          StringPrimitive("Male"),
+          StringPrimitive("M"),
+          StringPrimitive("F")          
+        ))
+      )
+
     }
 
   }

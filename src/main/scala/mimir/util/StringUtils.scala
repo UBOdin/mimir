@@ -12,7 +12,20 @@ object StringUtils
     } else {
       return "a "+str
     }
+  }
 
+  def oxfordComma(values: Seq[String], conjunct:String): String = 
+  {
+    values match { 
+      case Seq() => ""
+      case Seq(a) => a
+      case Seq(a, b) => s"$a $conjunct $b"
+      case _ => {
+        val reversed = values.reverse
+        val headString = reversed.tail.reverse.mkString(", ")
+        s"$headString, $conjunct ${reversed.head}"
+      }
+    }
   }
   
   def countSubstring(str1:String, str2:String):Int={
