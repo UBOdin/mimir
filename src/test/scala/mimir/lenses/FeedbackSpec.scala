@@ -110,7 +110,7 @@ object FeedbackSpec
       """).asString must be equalTo(s"$originalGuess")
       originalGuess must not be equalTo(800)
 
-      update(s"FEEDBACK MV:SPARKML:C 0 ($nullRow) IS 800")
+      update(s"FEEDBACK MV:SPARKML:C 0 ($nullRow) IS '800'")
       querySingleton(s"""
         SELECT C FROM MV WHERE ROWID() = ROWID($nullRow)
       """).asString must be equalTo("800")
