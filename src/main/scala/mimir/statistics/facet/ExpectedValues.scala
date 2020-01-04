@@ -11,6 +11,7 @@ import mimir.serialization.Json
 
 class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValue])
   extends Facet
+  with LazyLogging
 {
   def validAssignmentString(conjunct:String) = 
     StringUtils.oxfordComma(domain.map { _.toString }.toSeq, conjunct)
@@ -23,6 +24,7 @@ class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValu
     val invalid = 
       ExpressionUtils.makeAnd(domain.map { Var(column).neq(_) })
 
+    logger.info(s"Invalid lookup query: $invalid")
     db.query(
       query.filter { invalid }
            .groupBy(Var(column))(
@@ -32,6 +34,7 @@ class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValu
       val errorValues = 
         result.map { row => s"${row(0)} (${row(1)} times)" }
               .toIndexedSeq
+      logger.info(errorValues.mkString(", "))
       if(errorValues.size > 0){
         val trimmedErrorValues = 
           if(errorValues.size > 5){ 
