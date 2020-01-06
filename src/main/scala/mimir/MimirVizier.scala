@@ -881,7 +881,7 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
     val timeRes = logTime("explainCell") {
       try {
       logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + oper + "]"  ) ;
-      val provFilteredOper = db.uncertainty.filterByProvenance(oper,row)
+      val provFilteredOper = db.uncertainty.filterByProvenance(db.views.resolve(oper),row)
       val subsetReasons = db.uncertainty.explainSubset(
               provFilteredOper, 
               Seq(col).toSet, false, false)
