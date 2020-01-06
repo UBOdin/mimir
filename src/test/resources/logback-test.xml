@@ -85,6 +85,8 @@
   <!--+++++++++++++++++++++  Statistics  ++++++++++++++++++++++-->
   <logger name="mimir.statistics.FuncDep"                          level="WARN"/>
   <logger name="mimir.statistics.SystemCatalog"                    level="WARN"/>
+  <logger name="mimir.statistics.facet.Nullable$"                  level="WARN"/>
+  <logger name="mimir.statistics.facet.ExpectedValues$"            level="WARN"/>
 
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
   <logger name="mimir.util.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->

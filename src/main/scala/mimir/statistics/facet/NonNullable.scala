@@ -7,7 +7,7 @@ import mimir.Database
 import mimir.algebra._
 
 
-class NonNullable(column: ID)
+class NonNullable(val column: ID)
   extends Facet
 {
   def description = s"$column has no nulls"
@@ -32,9 +32,17 @@ class NonNullable(column: ID)
     "facet" -> JsString("NON_NULLABLE"),
     "data"  -> JsString(column.id)
   ))
+
+  override def equals(other: Any): Boolean =
+  { 
+    other match { 
+      case n:NonNullable => n.column.equals(column) 
+      case _ => false
+    }
+  }
 }
 
-class PctNullable(column: ID, pctExpected: Double)
+class PctNullable(val column: ID, val pctExpected: Double)
   extends Facet
 {
   def description = s"$column has no more than ${(pctExpected * 1000).toInt / 10.0}% nulls"
@@ -61,6 +69,14 @@ class PctNullable(column: ID, pctExpected: Double)
                   "expected" -> JsNumber(pctExpected)
                 ))
   ))
+
+  override def equals(other: Any): Boolean =
+  { 
+    other match { 
+      case n:PctNullable => n.column.equals(column) && n.pctExpected.equals(pctExpected)
+      case _ => false
+    }
+  }
 }
 
 

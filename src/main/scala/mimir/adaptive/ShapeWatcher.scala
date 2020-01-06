@@ -10,11 +10,18 @@ object ShapeWatcher
 {
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] = 
   {
-    val warningModel = (modelName:ID) => db.models.getOption(modelName) match {
-          case Some(model) => model
-          case None => createWarningModel(db, config, modelName)
-        }
-    val model = config.args match {
+    val warningModel = (modelName:ID) => 
+      db.views.get(modelName) match {
+        case None => createWarningModels(db, config, modelName)
+        case Some(meta) => 
+          db.query(meta.operator) { results =>
+            results.map { row => 
+              val idx = row(ID("ID"))
+              db.models.get(ID(s"$modelName:$idx"))
+            }.toIndexedSeq
+          }
+      }
+    val models = config.args match {
       case Seq() => {
         warningModel(ID("MIMIR_SHAPE_", config.schema))
       }
@@ -22,23 +29,24 @@ object ShapeWatcher
       case Seq(Var(modelName)) =>  warningModel(modelName)
     }
     
-    return Seq(
-      model
-    )
+    return models
   }
   
-  private def createWarningModel(db: Database, config: MultilensConfig, modelName:ID) = {
+  private def createWarningModels(db: Database, config: MultilensConfig, modelName:ID): Seq[WarningModel] = {
     val facets = DatasetShape.detect(db, config.query)
     val facetTable = modelName
+    val facetsWithIndex = facets.zipWithIndex
     val facetTableData = HardTable(
       Seq( ID("ID") -> TInt(), ID("FACET") -> TString() ),
-      facets.zipWithIndex
+      facetsWithIndex
             .map { case (facet, id) => 
               Seq(IntPrimitive(id), StringPrimitive(facet.toJson.toString))
             }
     )
     db.views.create(facetTable, facetTableData)
-    WarningModel(modelName, Seq(TInt(), TString()))
+    facetsWithIndex.map { case (_, id) => 
+      WarningModel(ID(s"${modelName.id}:$id"), Seq(TInt(), TString()))
+    }
   }
   
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator = 
@@ -56,7 +64,7 @@ object ShapeWatcher
     db.query(db.catalog.tableOperator(facetTable)) { result =>
       for(row <- result){ 
         val facet = DatasetShape.parse(row(ID("FACET")).asString)
-
+        val facet_id = row(ID("ID"))
         // First check if the facet is applicable.
         val warnings = facet.test(db, config.query)
 
@@ -66,7 +74,7 @@ object ShapeWatcher
         for(warning <- warnings){
           base = base.filter { 
             DataWarning(
-              modelName, 
+              ID(s"$modelName:$facet_id"), 
               BoolPrimitive(true), 
               StringPrimitive(warning), 
               Seq(row(ID("ID")), StringPrimitive(warning))
