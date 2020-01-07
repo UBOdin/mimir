@@ -1,12 +1,17 @@
 package mimir.adaptive
 
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
 import mimir.Database
 import mimir.models._
 import mimir.algebra._
 import mimir.statistics.DatasetShape
+import mimir.statistics.facet.{ Facet, AppliesToRow, AppliesToColumn }
+
 
 object ShapeWatcher
   extends Multilens
+  with LazyLogging
 {
   def initSchema(db: Database, config: MultilensConfig): TraversableOnce[Model] = 
   {
@@ -48,7 +53,32 @@ object ShapeWatcher
       WarningModel(ID(s"${modelName.id}:$id"), Seq(TInt(), TString()))
     }
   }
-  
+
+  def annotate(
+    db: Database, 
+    config:MultilensConfig, 
+    name: ID, 
+    expr: Expression, 
+    warnings: Seq[Expression],
+    id: Seq[Expression] = Seq()
+  ): Expression =
+  { 
+    // It's not elegant, but use a selection predicate to 
+    // annotate the row.  The predicate should get compiled away
+    // but the data warning will be applied to the entire row.
+    warnings
+      .zipWithIndex
+      .foldLeft(expr) { 
+        (oldExpr, warning) => 
+          DataWarning(
+            name,
+            oldExpr, 
+            warning._1, 
+            IntPrimitive(warning._2) +: id
+          )
+      }
+  }
+
   def tableCatalogFor(db: Database, config: MultilensConfig): Operator = 
   {
     val modelName:ID = config.args match {
@@ -63,23 +93,17 @@ object ShapeWatcher
     )
     db.query(db.catalog.tableOperator(facetTable)) { result =>
       for(row <- result){ 
-        val facet = DatasetShape.parse(row(ID("FACET")).asString)
-        val facet_id = row(ID("ID"))
-        // First check if the facet is applicable.
-        val warnings = facet.test(db, config.query)
-
-        // It's not elegant, but use a selection predicate to 
-        // annotate the row.  The predicate should get compiled away
-        // but the data warning will be applied to the entire row.
-        for(warning <- warnings){
-          base = base.filter { 
-            DataWarning(
-              ID(s"$modelName:$facet_id"), 
-              BoolPrimitive(true), 
-              StringPrimitive(warning), 
-              Seq(row(ID("ID")), StringPrimitive(warning))
-            )
-          }
+        DatasetShape.parse(row(ID("FACET")).asString) match {
+          case _:AppliesToColumn => {}
+          case _:AppliesToRow => {}
+          case facet:Facet => 
+            annotate(
+              db, config,
+              ID(s"$modelName:${row(ID("ID"))}"), 
+              BoolPrimitive(true),
+              facet.test(db, config.query)
+                .map { StringPrimitive(_) }
+            ) 
         }
       }
     }
@@ -107,9 +131,59 @@ object ShapeWatcher
 
   def viewFor(db: Database, config: MultilensConfig, table: ID): Option[Operator] = 
     if(table.equals(config.schema)){
-      Some(config.query)
+      val modelName:ID = config.args match {
+        case Seq() =>  ID("MIMIR_SHAPE_", config.schema)
+        case Seq(Var(modelN)) => modelN
+        case Seq(StringPrimitive(modelN)) => ID(modelN)
+      }
+      val facetTable = modelName
+      var query = config.query
+      db.query(db.catalog.tableOperator(facetTable)) { result =>
+        for(row <- result){ 
+          DatasetShape.parse(row(ID("FACET")).asString) match {
+            case facet:AppliesToColumn => 
+              query = query.alterColumnsByID(
+                facet.appliesToColumn -> 
+                  facet.facetInvalidCondition
+                       .thenElse { 
+                          annotate(
+                            db, config,
+                            ID(s"$modelName:${row(ID("ID"))}"), 
+                            Var(facet.appliesToColumn),
+                            Seq(facet.facetInvalidDescription),
+                            Seq(RowIdVar())
+                          )
+                        } { Var(facet.appliesToColumn) }
+              )
+            case facet:AppliesToRow => 
+              query = query.filter { 
+                  facet.facetInvalidCondition
+                       .thenElse { 
+                          annotate(
+                            db, config,
+                            ID(s"$modelName:${row(ID("ID"))}"), 
+                            BoolPrimitive(true),
+                            Seq(facet.facetInvalidDescription),
+                            Seq(RowIdVar())
+                          ) 
+                        } { BoolPrimitive(true) }
+              } 
+            case _:Facet => {}
+          }
+        }
+      }
+      logger.debug(s"ShapeWatcher ${config.schema}: $query")
+      return Some(query)
     } else {
       None
     }
 }
+
+
+
+
+
+
+
+
 

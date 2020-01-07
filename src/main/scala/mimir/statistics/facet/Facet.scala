@@ -12,3 +12,18 @@ trait Facet
 
   override def toString = description
 }
+
+trait AppliesToColumn
+  extends Facet
+{
+  def facetInvalidCondition: Expression
+  def appliesToColumn: ID
+  def facetInvalidDescription: Expression
+}
+
+trait AppliesToRow
+  extends Facet
+{
+  def facetInvalidCondition: Expression
+  def facetInvalidDescription: Expression
+}

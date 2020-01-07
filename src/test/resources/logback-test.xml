@@ -13,6 +13,7 @@
 
   <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
   <logger name="mimir.adaptive.TypeInference$"                     level="WARN"/>
+  <logger name="mimir.adaptive.ShapeWatcher$"                      level="WARN"/>
 
   <!--+++++++++++++++++++++++  Algebra  +++++++++++++++++++++++-->
   <logger name="mimir.algebra.ExpressionChecker"                   level="WARN"/>

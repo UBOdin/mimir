@@ -11,22 +11,32 @@ import mimir.serialization.Json
 
 class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValue])
   extends Facet
+  with AppliesToColumn
   with LazyLogging
 {
   def validAssignmentString(conjunct:String) = 
     StringUtils.oxfordComma(domain.map { _.toString }.toSeq, conjunct)
   def description = 
     s"$column must be one of ${validAssignmentString("or")}"
+
+  def appliesToColumn = column
+  def facetInvalidCondition = 
+    ExpressionUtils.makeAnd(domain.map { Var(column).neq(_) })
+  def facetInvalidDescription =
+    Function(ID("CONCAT"), Seq(
+      StringPrimitive(s"$description, but found "),
+      Var(column),
+      StringPrimitive(" instead.")
+    ))
+
+
   def test(db: Database, query: Operator): Seq[String] =
   {
     if(!query.columnNames.contains(column)){ return Seq() }
     
-    val invalid = 
-      ExpressionUtils.makeAnd(domain.map { Var(column).neq(_) })
-
-    logger.info(s"Invalid lookup query: $invalid")
+    logger.debug(s"Invalid lookup query: $facetInvalidCondition")
     db.query(
-      query.filter { invalid }
+      query.filter { facetInvalidCondition }
            .groupBy(Var(column))(
               AggFunction(ID("count"), false, Seq(), ID("TOT"))
            )
@@ -34,7 +44,7 @@ class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValu
       val errorValues = 
         result.map { row => s"${row(0)} (${row(1)} times)" }
               .toIndexedSeq
-      logger.info(errorValues.mkString(", "))
+      logger.debug(errorValues.mkString(", "))
       if(errorValues.size > 0){
         val trimmedErrorValues = 
           if(errorValues.size > 5){ 
@@ -78,21 +88,30 @@ class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValu
 
 class DrawnFromRange(column: ID, t: Type, low:PrimitiveValue, high:PrimitiveValue)
   extends Facet
+  with AppliesToColumn
 {
   def description = 
     s"$column must be between $low and $high"
+
+  def appliesToColumn = column
+  def facetInvalidCondition = 
+    ExpressionUtils.makeOr(Seq(
+      Var(column).lt(low),
+      Var(column).gt(high)
+    ))
+  def facetInvalidDescription =
+    Function(ID("CONCAT"), Seq(
+      StringPrimitive(s"$description, but found "),
+      Var(column),
+      StringPrimitive(" instead.")
+    ))
 
   def test(db: Database, query: Operator): Seq[String] =
   {
     if(!query.columnNames.contains(column)){ return Seq() }
     
-    val invalid = ExpressionUtils.makeOr(Seq(
-      Var(column).lt(low),
-      Var(column).gt(high)
-    ))
-
     db.query(
-      query.filter { invalid }
+      query.filter { facetInvalidCondition }
            .aggregate(
               AggFunction(ID("count"), false, Seq(), ID("cnt")),
               AggFunction(ID("min"), false, Seq(Var(column)), ID("low")),
@@ -110,7 +129,7 @@ class DrawnFromRange(column: ID, t: Type, low:PrimitiveValue, high:PrimitiveValu
 
         Seq(
           (
-            s"Previously $column only contained values between $low and $high"+
+            s"Previously $column only contained values between $low and $high "+
             s"but now also contains $newValueSummary (${row(0)} unexpected values)"
           )
         )
