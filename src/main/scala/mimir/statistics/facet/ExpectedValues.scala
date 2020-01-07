@@ -23,7 +23,7 @@ class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValu
   def facetInvalidCondition = 
     ExpressionUtils.makeAnd(domain.map { Var(column).neq(_) })
   def facetInvalidDescription =
-    Function(ID("CONCAT"), Seq(
+    Function(ID("concat"), Seq(
       StringPrimitive(s"$description, but found "),
       Var(column),
       StringPrimitive(" instead.")
@@ -100,7 +100,7 @@ class DrawnFromRange(column: ID, t: Type, low:PrimitiveValue, high:PrimitiveValu
       Var(column).gt(high)
     ))
   def facetInvalidDescription =
-    Function(ID("CONCAT"), Seq(
+    Function(ID("concat"), Seq(
       StringPrimitive(s"$description, but found "),
       Var(column),
       StringPrimitive(" instead.")
