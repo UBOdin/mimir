@@ -894,7 +894,14 @@ def vistrailsQueryMimirJson(query : String, includeUncertainty:Boolean, includeR
         }
     }
     logger.debug(s"explainCell Took: ${timeRes._2}")
-    timeRes._1
+    val reasonStrs = timeRes._1.map(_.toJSON)
+    val reasonStrsSet = reasonStrs.toSet
+    //TODO: mike - remove this work-around for filtering out duplicate reasons for cell
+    //  from shapedetector.  I think the problem is related to appliestocolumn because the
+    //  reasons are duplicated the same number of times as there are number of columns
+    //  that the shapedetector facet applies to.  I will fix this correctly after cidr.
+    reasonStrsSet.map(reasonstr => 
+      reasonStrs.indexOf(reasonstr)).toSeq.map(idx => timeRes._1(idx))
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + oper + "]", t)

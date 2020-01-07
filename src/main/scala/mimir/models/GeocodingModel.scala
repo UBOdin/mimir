@@ -158,7 +158,7 @@ class GeocodingModel(override val name: ID, addrCols:Seq[Expression], geocoder:I
     val state = args(4) match { case NullPrimitive() => "" ; case x => x.asString }
     val url = geocoder match {
       case ID("GOOGLE") => (s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$houseNumber+${streetName.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=$apiKey")
-      case ID("OSM") | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber%20$streetName&city=$city&state=$state")
+      case ID("OSM") | _ => (s"https://geocode.em-sys.net/?format=json&street=$houseNumber%20$streetName&city=$city&state=$state")
     }
     try {
       val geoRes = HTTPUtils.get(url) 

@@ -229,6 +229,7 @@ object GeocodingSpec
     }
     
     "Dump Domain OSM" >> {
+      skipped("DumpDomain mode not supported by spark"); ko
       update("""
         CREATE LENS GEO_LENS_DOMAIN_DUMP_OSM 
           AS SELECT * FROM ADDR
@@ -265,6 +266,7 @@ object GeocodingSpec
     }
     
     "Dump Domain GOOGLE" >> {
+      skipped("DumpDomain mode not supported by spark"); ko
       update("""
         CREATE LENS GEO_LENS_DOMAIN_DUMP_GOOGLE 
           AS SELECT * FROM ADDR
