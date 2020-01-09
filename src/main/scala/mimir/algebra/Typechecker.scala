@@ -178,6 +178,7 @@ class Typechecker(
 
 	def schemaOf(o: Operator): Seq[(ID, Type)] =
 	{
+		logger.trace(s"Schema Of \n$o")
 		o match {
 			case Project(cols, src) =>
 				val schema = schemaOf(src).toMap

@@ -146,11 +146,11 @@ class SqlToRA(db: Database)
     // flat query.
     //
     val applySortAndLimit = 
-    () => {
+    (sortBindings:(Column => MimirAttribute)) => {
       if(!select.orderBy.isEmpty){
         ret = Sort(
           select.orderBy.map { ob => SortColumn(
-            convertExpression(ob.expression, bindings), 
+            convertExpression(ob.expression, sortBindings), 
             ob.ascending
           )},
           ret
@@ -247,7 +247,7 @@ class SqlToRA(db: Database)
       // NOT an aggregate select.  
 
       // Apply the sort and limit clauses before the projection if necessary
-      applySortAndLimit()
+      applySortAndLimit(bindings)
 
       // Create a simple projection around the return value.
       ret = 
@@ -306,15 +306,39 @@ class SqlToRA(db: Database)
                 case _ => unhandled("GroupBy[Expression]")
               }
 
-      val groupByColumnSchema:Map[TableName, Bindings] = 
+      val preAggregateGroupByColumnSchema:Map[TableName, Bindings] = 
         declaredGBColumns.groupBy { _._1 }
                          .mapValues { _.map { case (table, col) => 
                                         col.column -> bindings(col) 
                                       } }
                          .mapValues { NameLookup(_) }
 
+      val postAggregateGroupByColumnSchema:Map[TableName, Bindings] = 
+        declaredGBColumns.groupBy { _._1 }
+                         .mapValues { _.map { case (table, col) => 
+                                        col.column -> ID.upper(col.column)
+                                      } }
+                         .mapValues { NameLookup(_) }
+
+      logger.trace(s"Pre-Aggregate Group By Column Schema: $preAggregateGroupByColumnSchema")
+      logger.trace(s"Post-Aggregate Group By Column Schema: $postAggregateGroupByColumnSchema")
+
       // Column names in the output schema
       val targetNames = targets.map( _._2 )
+
+
+      // Schema and lookup operations for the post-projection aggregate query.
+      // e.g., for SELECT A, SUM(B) AS C FROM R
+      // should allow lookups for A, R.A, and C
+      //
+      // This is used in two places: For interpreting (some types) of HAVING 
+      // clauses (see below for the insanity) and for interpreting ORDER BY clauses
+      val postAggregateSchema:TableBindings = 
+        NameLookup(Map(
+          sparsity.Name("__AGGREGATE") -> NameLookup(targets.map { case (sparsity, mimir, _) => (sparsity, mimir) })
+        ) ++ postAggregateGroupByColumnSchema)
+
+      val postAggregateBindings = lookupColumn(_:Column, postAggregateSchema)
 
       // The having clause.  "Some" if there is one, "None" if not.
       // The Boolean is TRUE if the having expression is applied to the
@@ -331,13 +355,6 @@ class SqlToRA(db: Database)
           // in the HAVING clause, we assume it uses the pre-aggregate schema.
           // Otherwise it's the post-aggregate schema.
 
-
-          val postAggregateSchema:TableBindings = 
-            NameLookup(Map(
-              sparsity.Name("__AGGREGATE") -> NameLookup(targets.map { case (sparsity, mimir, _) => (sparsity, mimir) })
-            ) ++ groupByColumnSchema)
-
-          val postAggregateBindings = lookupColumn(_:Column, postAggregateSchema)
 
           // Our first attempt at conversion: A post-aggregate
           val postAggregateHavingExpr: Option[Expression] =
@@ -375,7 +392,7 @@ class SqlToRA(db: Database)
 
               val havingSchema:TableBindings = NameLookup(Map(
                 sparsity.Name("__HAVING") -> NameLookup(havingAggExprs.map { case (_, _, _, alias) => alias.quoted -> alias })
-              ) ++ groupByColumnSchema)
+              ) ++ preAggregateGroupByColumnSchema)
               val havingBindings = lookupColumn(_:Column, havingSchema)
 
               // And then the PostExpression is what we want to use in the
@@ -397,7 +414,7 @@ class SqlToRA(db: Database)
       val interAggregateSchema:TableBindings = NameLookup(Map(
         sparsity.Name("__AGGREGATE") -> 
           NameLookup(allAggFunctions.map { fn => fn.alias.quoted -> fn.alias })
-      ) ++ groupByColumnSchema)
+      ) ++ preAggregateGroupByColumnSchema)
       val interAggregateBindings = lookupColumn(_:Column, interAggregateSchema)
 
       // Assemble the Aggregate
@@ -431,9 +448,10 @@ class SqlToRA(db: Database)
         case _ => ()
       }
 
+      logger.trace(s"Bindings after aggregate: $postAggregateSchema")
       // Apply sort and limit if necessary
-      applySortAndLimit()
-    }
+      applySortAndLimit(postAggregateBindings)
+    } // end Aggregate Select case
 
     //////////////////////////// Convert Distinct /////////////////////////////
     if(select.distinct) {
