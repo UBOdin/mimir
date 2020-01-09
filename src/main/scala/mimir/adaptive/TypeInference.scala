@@ -139,9 +139,9 @@ object TypeInference
                     config.schema.withPrefix("MIMIR_TI_WARNING_"),
                     NullPrimitive(),
                     Function("CONCAT", 
-                      StringPrimitive("Couldn't Cast [ "),
+                      StringPrimitive("Couldn't Cast '"),
                       Var(colName),
-                      StringPrimitive(" ] to "+bestGuessType+" on row "),
+                      StringPrimitive("' to "+bestGuessType+" on row "),
                       RowIdVar(),
                       StringPrimitive(s" of ${config.humanReadableName}.${colName}")
                     ),
