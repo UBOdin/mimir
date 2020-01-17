@@ -422,3 +422,26 @@ case class AdaptiveView(schema: ID, name: ID, query: Operator, annotations: Set[
     s"$prefix$schema.$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
   def columnNames = query.columnNames
 }
+
+sealed trait SamplingMode
+
+case class SampleRowsUniformly(probability:Double) extends SamplingMode
+{
+  override def toString = s"WITH PROBABILITY $probability"
+}
+case class SampleStratifiedOn(column:ID, strata:Map[PrimitiveValue,Double]) extends SamplingMode
+{
+  override def toString = s"ON $column WITH STRATA ${strata.map { case (v,p) => s"$v -> $p"}.mkString(" | ")}"
+}
+
+case class SampleData(mode: SamplingMode, source: Operator, seed: Long, caveat: Option[String] = None)
+  extends Operator
+{
+  def children: Seq[Operator] = Seq(source)
+  def expressions: Seq[Expression] = None
+  def rebuild(c: Seq[Operator]) = SampleData(mode, c(0), caveat)
+  def rebuildExpressions(x: Seq[Expression]) = this
+  def toString(prefix: String): String = 
+    s"${prefix}SAMPLE $mode [\n${source.toString(prefix+"  ")} WITH SEED $seed \n$prefix]"
+  def columnNames = source.columnNames
+}
