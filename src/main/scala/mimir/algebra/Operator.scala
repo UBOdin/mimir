@@ -2,6 +2,7 @@ package mimir.algebra;
 
 import mimir.util.ListUtils
 import mimir.views.ViewAnnotation
+import mimir.algebra.sampling.SamplingMode
 
 /**
  * Abstract parent class of all relational algebra operators
@@ -423,25 +424,20 @@ case class AdaptiveView(schema: ID, name: ID, query: Operator, annotations: Set[
   def columnNames = query.columnNames
 }
 
-sealed trait SamplingMode
 
-case class SampleRowsUniformly(probability:Double) extends SamplingMode
-{
-  override def toString = s"WITH PROBABILITY $probability"
-}
-case class SampleStratifiedOn(column:ID, strata:Map[PrimitiveValue,Double]) extends SamplingMode
-{
-  override def toString = s"ON $column WITH STRATA ${strata.map { case (v,p) => s"$v -> $p"}.mkString(" | ")}"
-}
-
-case class SampleData(mode: SamplingMode, source: Operator, seed: Long, caveat: Option[String] = None)
+/**
+ * Reduce the size of the input dataset down to a specific sample.
+ * 
+ * See SamplingMode above for different sampling strategies
+ */
+case class DrawSamples(mode: SamplingMode, source: Operator, seed: Long, caveat: Option[(ID,String)] = None)
   extends Operator
 {
   def children: Seq[Operator] = Seq(source)
-  def expressions: Seq[Expression] = None
-  def rebuild(c: Seq[Operator]) = SampleData(mode, c(0), caveat)
-  def rebuildExpressions(x: Seq[Expression]) = this
+  def expressions: Seq[Expression] = mode.expressions
+  def rebuild(c: Seq[Operator]) = DrawSamples(mode, c(0), seed, caveat)
+  def rebuildExpressions(x: Seq[Expression]) = DrawSamples(mode.rebuildExpressions(x), source, seed, caveat)
   def toString(prefix: String): String = 
-    s"${prefix}SAMPLE $mode [\n${source.toString(prefix+"  ")} WITH SEED $seed \n$prefix]"
+    s"${prefix}SAMPLE $mode [\n${source.toString(prefix+"  ")}\n$prefix] WITH SEED $seed"
   def columnNames = source.columnNames
 }

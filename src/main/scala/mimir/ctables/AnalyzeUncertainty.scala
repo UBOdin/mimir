@@ -631,6 +631,21 @@ class AnalyzeUncertainty(db: Database) extends LazyLogging {
 				explainSubsetWithoutOptimizing(lhs,wantCol,wantRow,wantSort, wantSchema) ++ 
 				explainSubsetWithoutOptimizing(rhs,wantCol,wantRow,wantSort, wantSchema)
 			}
+
+			case DrawSamples(mode, source, seed, caveat) => {
+				(
+					explainSubsetWithoutOptimizing(source,wantCol,wantRow,wantSort,wantSchema) ++
+					caveat.map { case (modelName, message) =>
+						val model = db.models.get(modelName)
+						new ReasonSet(
+							model,
+							0,
+							None,
+							(k, v) => new DataWarningReason(model, 0, NullPrimitive(), message, Seq())
+						)
+					}
+				)
+			}
 		}
 	}
 		
