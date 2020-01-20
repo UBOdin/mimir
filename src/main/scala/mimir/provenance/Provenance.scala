@@ -181,6 +181,11 @@ object Provenance extends LazyLogging {
         ( outerJoinWithSafeRHS, newLhsRowids ++ newRhsRowids )
       }
 
+      case d@DrawSamples(_, child, _, _) => {
+        val (newChild, childRowids) = compile(child)
+        (d.rebuild(Seq(newChild)), childRowids)
+      }
+
     }
   }
   

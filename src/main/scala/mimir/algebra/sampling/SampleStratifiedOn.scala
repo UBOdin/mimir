@@ -79,7 +79,7 @@ object SampleStratifiedOn
 
   def parseJson(json:Map[String, JsValue]): Option[SampleStratifiedOn] =
   {
-    if(json("mode").equals(MODE)){
+    if(json("mode").as[String].equals(MODE)){
       val t = MimirJson.toType(json("type"))
 
       Some(SampleStratifiedOn(

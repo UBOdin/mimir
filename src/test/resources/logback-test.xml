@@ -56,6 +56,7 @@
   <logger name="mimir.models.TypeInferenceModel"                   level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.WekaModel$"                           level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.SeriesMissingValueModel"              level="WARN"/>
+  <logger name="mimir.models.DetectHeader$"                        level="INFO"/>
 
   <!--+++++++++++++++++++++  Optimizer  +++++++++++++++++++++++-->
   <logger name="mimir.optimizer.Optimizer$"                        level="WARN"/>

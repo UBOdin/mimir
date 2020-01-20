@@ -71,15 +71,26 @@ object DatasetShapeSpec
           db.uncertainty.explainEverything(db.table("Z_BAD_S"))
         }
       
-      resultSets.map(_.all(db).map(_.toJSON)).flatten must contain(eachOf(
-          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"There is an error(s) in the data source on row 911701464 of Z_BAD. The raw value of the row in the data source is [ ,,, ]","repair":{"selector":"warning"},"args":["'911701464'"]}""",
-          """{"rowidarg":-1,"source":"MIMIR_TI_ATTR_Z_BAD_TI","confirmed":true,"varid":0,"english":"I guessed that Z_BAD.B_0 was of type INT because all of the data fit","repair":{"selector":"list","values":[{"choice":"real","weight":0.8},{"choice":"int","weight":0.8},{"choice":"varchar","weight":0.5}]},"args":[1]}""",
-          """{"rowidarg":3,"source":"MIMIR_TI_WARNING_Z_BAD_TI","confirmed":false,"varid":0,"english":"Couldn't Cast [ ---- ] to int on row -2127400930 of Z_BAD.A","repair":{"selector":"warning"},"args":["'A'","'----'","'int'","'-2127400930'"]}""",
-          """{"rowidarg":-1,"source":"MIMIR_TI_ATTR_Z_BAD_TI","confirmed":false,"varid":0,"english":"I guessed that Z_BAD.A was of type INT because around 80% of the data fit","repair":{"selector":"list","values":[{"choice":"real","weight":0.8},{"choice":"int","weight":0.8},{"choice":"varchar","weight":0.5}]},"args":[0]}""",
-          """{"rowidarg":0,"source":"MIMIR_DSE_WARNING_Z_BAD_DSE","confirmed":false,"varid":0,"english":"There is an error(s) in the data source on row -2127400930 of Z_BAD. The raw value of the row in the data source is [ ---- ]","repair":{"selector":"warning"},"args":["'-2127400930'"]}""",
-          """{"rowidarg":-1,"source":"MIMIR_CH_Z_BAD_DH","confirmed":false,"varid":0,"english":"I analyzed the first several rows of Z_BAD and there appear to be column headers in the first row.  For column with index: 1, the detected header is B_0","repair":{"selector":"by_type","type":"varchar"},"args":[1]}""",
-          """{"rowidarg":-1,"source":"MIMIR_CH_Z_BAD_DH","confirmed":false,"varid":0,"english":"I analyzed the first several rows of Z_BAD and there appear to be column headers in the first row.  For column with index: 0, the detected header is A","repair":{"selector":"by_type","type":"varchar"},"args":[0]}"""
-          ))
+      resultSets
+        .flatMap { _.all(db) }
+        .map { reason => 
+          reason.model.name.id -> reason.args.map { _.asString }.mkString(",")
+        } must contain(eachOf(
+          "MIMIR_DSE_WARNING_Z_BAD_DSE" -> "911701464",
+            // """{"rowidarg":0,"source":"","confirmed":false,"varid":0,"english":"There is an error(s) in the data source on row 911701464 of Z_BAD. The raw value of the row in the data source is [ ,,, ]","repair":{"selector":"warning"},"args":["'911701464'"]}""",
+          "MIMIR_TI_ATTR_Z_BAD_TI" -> "1",
+            // """{"rowidarg":,"source":"","confirmed":true,"varid":0,"english":"I guessed that Z_BAD.B_0 was of type INT because all of the data fit","repair":{"selector":"list","values":[{"choice":"real","weight":0.8},{"choice":"int","weight":0.8},{"choice":"varchar","weight":0.5}]},"args":[1]}""",
+          "MIMIR_TI_WARNING_Z_BAD_TI" -> "A,----,int,-2127400930",
+            // """{"rowidarg":,"source":"","confirmed":false,"varid":0,"english":"Couldn't Cast [ ---- ] to int on row -2127400930 of Z_BAD.A","repair":{"selector":"warning"},"args":["'A'","'----'","'int'","'-2127400930'"]}""",
+          "MIMIR_TI_ATTR_Z_BAD_TI" -> "0",
+            // """{"rowidarg":,"source":"","confirmed":false,"varid":0,"english":"I guessed that Z_BAD.A was of type INT because around 80% of the data fit","repair":{"selector":"list","values":[{"choice":"real","weight":0.8},{"choice":"int","weight":0.8},{"choice":"varchar","weight":0.5}]},"args":[0]}""",
+          "MIMIR_DSE_WARNING_Z_BAD_DSE" -> "-2127400930",
+            // """{"rowidarg":,"source":"","confirmed":false,"varid":0,"english":"There is an error(s) in the data source on row -2127400930 of Z_BAD. The raw value of the row in the data source is [ ---- ]","repair":{"selector":"warning"},"args":["'-2127400930'"]}""",
+          "MIMIR_CH_Z_BAD_DH" -> "1",
+            // """{"rowidarg":,"source":"","confirmed":false,"varid":0,"english":"I analyzed the first several rows of Z_BAD and there appear to be column headers in the first row.  For column with index: 1, the detected header is B_0","repair":{"selector":"by_type","type":"varchar"},"args":[1]}""",
+          "MIMIR_CH_Z_BAD_DH" -> "0"
+            // """{"rowidarg":,"source":"","confirmed":false,"varid":0,"english":"I analyzed the first several rows of Z_BAD and there appear to be column headers in the first row.  For column with index: 0, the detected header is A","repair":{"selector":"by_type","type":"varchar"},"args":[0]}"""
+        ))
       
       val result = query("""
         SELECT * FROM Z_BAD_S
