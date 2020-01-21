@@ -39,6 +39,7 @@ import mimir.parser.{
     Compare,
     CreateAdaptiveSchema,
     CreateLens,
+    CreateSample,
     DrawPlot,
     Feedback,
     Load,
@@ -59,6 +60,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
+import scala.util.Random
 
 
  /**
@@ -261,6 +263,28 @@ case class Database(
           views.create(viewID, optQuery)
           if(view.materialized) { views.materialize(viewID) }
         }
+      }
+
+      /********** CREATE SAMPLE [VIEW] STATEMENTS **********/
+      case CreateSample(name, mode, source, orReplace, asView) => {
+        val baseQuery = 
+          DrawSamples(
+            mode,
+            sqlToRA.convertFromElement(source)._1,
+            (new Random().nextLong())
+          )
+        val optQuery = compiler.optimize(baseQuery)
+        val sampleID = ID.upper(name)
+
+        if(views.get(sampleID) != None){
+          views.drop(sampleID)
+        }
+
+        views.create(sampleID, optQuery)
+
+        // If we're being asked to create a table, then fake one 
+        // with a materialized view to keep provenance.
+        if(!asView) { views.materialize(sampleID) }
       }
 
       /********** ALTER VIEW STATEMENTS **********/

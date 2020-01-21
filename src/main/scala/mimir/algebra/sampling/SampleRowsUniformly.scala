@@ -35,7 +35,6 @@ object SampleRowsUniformly
 
   def parseJson(json:Map[String, JsValue]): Option[SampleRowsUniformly] =
   {
-    println(s"TEST: ${json("mode")} =?= ${MODE}")
     if(json("mode").as[String].equals(MODE)){
       Some(SampleRowsUniformly(json("probability").as[Double]))
     } else {

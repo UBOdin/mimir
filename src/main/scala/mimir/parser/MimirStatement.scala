@@ -92,3 +92,11 @@ case class AlterTable(
   target: Name,
   op: AlterTableOperation
 ) extends MimirStatement
+
+case class CreateSample(
+  name: Name,
+  mode: mimir.algebra.sampling.SamplingMode,
+  source: FromElement,
+  orReplace: Boolean,
+  asView: Boolean = true
+) extends MimirStatement

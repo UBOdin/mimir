@@ -83,5 +83,20 @@ object SamplingSpec
       counts(1) must beCloseTo(8, 4)
 
     }
+
+    "create named samples" >> {
+
+      update("CREATE SAMPLE VIEW sample FROM data WITH FRACTION 0.5;")
+      update("CREATE SAMPLE VIEW stratified FROM data WITH STRATIFIED ON manufacturer (0 ~ 1.0, 1 ~ 0.1);")
+      update("CREATE OR REPLACE SAMPLE VIEW sample FROM data WITH FRACTION 0.1;")
+      
+      val count = 
+        db.query(db.table("SAMPLE").count()) { result =>
+          val row = result.next()
+          row(ID("COUNT")).asLong.toInt
+        }
+      // 345 rows in the input file.  10% sampling rate ~= 34-35 rows.
+      count should beCloseTo(34, 10)
+    }
   }
 }
