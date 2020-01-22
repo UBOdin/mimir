@@ -148,3 +148,12 @@ object SchemaList {
 
 
 
+
+case class CreateSampleResponse (
+            /* name of resulting view */
+                  viewName: String
+) extends Response
+
+object CreateSampleResponse {
+  implicit val format: Format[CreateSampleResponse] = Json.format
+}

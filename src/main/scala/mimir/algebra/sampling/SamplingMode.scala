@@ -31,4 +31,9 @@ object SamplingMode
     }
     throw new RAException(s"Invalid Sampling Mode: $v")
   }
+
+  implicit val format = Format[SamplingMode](
+    new Reads[SamplingMode]{ def reads(v: JsValue) = JsSuccess(fromJson(v)) },
+    new Writes[SamplingMode]{ def writes(mode: SamplingMode) = mode.toJson }
+  )
 }

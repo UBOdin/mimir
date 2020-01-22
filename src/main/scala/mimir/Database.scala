@@ -266,12 +266,12 @@ case class Database(
       }
 
       /********** CREATE SAMPLE [VIEW] STATEMENTS **********/
-      case CreateSample(name, mode, source, orReplace, asView) => {
+      case CreateSample(name, mode, source, orReplace, asView, seedMaybe) => {
         val baseQuery = 
           DrawSamples(
             mode,
-            sqlToRA.convertFromElement(source)._1,
-            (new Random().nextLong())
+            table(source),
+            seedMaybe.getOrElse { (new Random().nextLong()) }
           )
         val optQuery = compiler.optimize(baseQuery)
         val sampleID = ID.upper(name)

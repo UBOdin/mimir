@@ -96,7 +96,8 @@ case class AlterTable(
 case class CreateSample(
   name: Name,
   mode: mimir.algebra.sampling.SamplingMode,
-  source: FromElement,
+  source: Name,
   orReplace: Boolean,
-  asView: Boolean = true
+  asView: Boolean = true,
+  seed: Option[Long] = None
 ) extends MimirStatement

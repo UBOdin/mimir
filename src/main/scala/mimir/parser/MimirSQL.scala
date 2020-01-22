@@ -220,7 +220,7 @@ object MimirSQL
       MimirKeyword("VIEW").!.?.map { !_.isEmpty } ~/
       Sparsity.identifier ~
       MimirKeyword("FROM") ~/
-      SQL.fromElement ~
+      Sparsity.identifier ~
       MimirKeyword("WITH") ~/
       samplingMode
     ).map { case (orReplace, asView, name, source, mode) =>
