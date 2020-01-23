@@ -1,6 +1,8 @@
 package mimir.algebra
 
+import scala.util.Random
 import mimir.parser.ExpressionParser
+import mimir.algebra.sampling._
 
 trait OperatorConstructors
 {
@@ -201,4 +203,40 @@ trait OperatorConstructors
 
   def limit(count: Int = -1, offset: Int = 0 ): Operator =
     Limit( offset, if(count >= 0) { Some(count) } else { None }, toOperator )
+
+  def sampleUniformly(
+    p: Double, 
+    seed:Option[Long] = None, 
+    caveat:Option[(ID,String)] = None
+  ): Operator =
+    DrawSamples( 
+      SampleRowsUniformly(p), 
+      toOperator, 
+      seed.getOrElse(new Random().nextLong()), 
+      caveat 
+    )
+  
+  def stratifiedSample(
+    col: String, 
+    colType: Type,
+    strata: Map[PrimitiveValue, Double], 
+    seed:Option[Long] = None, 
+    caveat:Option[(ID,String)] = None
+  ): Operator =
+    stratifiedSampleByID(ID(col), colType, strata, seed, caveat)
+
+  def stratifiedSampleByID(
+    col: ID, 
+    colType: Type,
+    strata: Map[PrimitiveValue, Double], 
+    seed:Option[Long] = None, 
+    caveat:Option[(ID,String)] = None
+  ): Operator =
+    DrawSamples( 
+      SampleStratifiedOn(col, colType, strata), 
+      toOperator, 
+      seed.getOrElse(new Random().nextLong()), 
+      caveat 
+    )
+
 }

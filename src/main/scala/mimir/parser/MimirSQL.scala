@@ -12,6 +12,8 @@ import sparsity.expression.{Expression,StringPrimitive}
 import sparsity.Name
 import java.sql.SQLException
 import java.io.Reader
+import mimir.sql.SqlToRA
+import mimir.algebra.ID
 
 object MimirSQL
 {
@@ -57,6 +59,7 @@ object MimirSQL
     | compare
     | createAdaptive // must come before 'basicStatement'
     | createLens     // must come before 'basicStatement'
+    | (&( MimirKeyword("CREATE") ) ~/ createSample)   // must come before 'basicStatement'
     | dropAdaptive   // must come before 'basicStatement'
     | dropLens       // must come before 'basicStatement'
     | drawPlot
@@ -164,6 +167,66 @@ object MimirSQL
     ).map { case (name, query, lensType, args) => 
       CreateLens(name, query, lensType, args)
     }
+  )
+
+  def basicSample[_:P] = P(
+    (
+      MimirKeyword("FRACTION") ~/ "=".? ~/
+      Sparsity.decimal
+    ).map { mimir.algebra.sampling.SampleRowsUniformly(_) }
+  )
+
+  def simpleStratifiedSample[_:P] = P(
+    (
+      MimirKeyword("STRATIFIED") ~/
+      MimirKeyword("ON") ~/
+      Sparsity.identifier ~
+      "(" ~/ (
+        ExprParser.primitive ~ "~" ~/
+        Sparsity.decimal
+      ).rep(sep = Sparsity.comma) ~ ")"
+    ).map { case (col, rawStrata) => 
+      if(rawStrata.isEmpty){
+        throw new SQLException("CREATE SAMPLE _ STRATIFIED ON requires one or more strata probabilities")
+      }
+      val (rawStrataBins, strataProbabilities) = rawStrata.unzip
+      val strataBins = rawStrataBins.map { SqlToRA.convertPrimitive(_) }
+
+      val strataBinTypes = strataBins
+      //Ensure all of the strata bins are of a consistent type
+      val t = strataBins(0).getType
+      if(strataBins.exists { !_.getType.equals(t) }){
+        throw new SQLException("CREATE SAMPLE _ STRATIFIED ON requires all strata bin identifiers to be of the same type")
+      }
+
+      mimir.algebra.sampling.SampleStratifiedOn(
+        ID.upper(col),
+        t,
+        strataBins.zip(strataProbabilities).toMap
+      )
+    }
+  )
+
+  def samplingMode[_:P] = P[mimir.algebra.sampling.SamplingMode](
+      basicSample
+    | simpleStratifiedSample
+  )
+
+  def createSample[_:P] = P(
+    (
+      MimirKeyword("CREATE") ~
+      (MimirKeyword("OR") ~ MimirKeyword("REPLACE")).!.?.map { !_.isEmpty } ~
+      MimirKeyword("SAMPLE") ~/
+      MimirKeyword("VIEW").!.?.map { !_.isEmpty } ~/
+      Sparsity.identifier ~
+      MimirKeyword("FROM") ~/
+      Sparsity.identifier ~
+      MimirKeyword("WITH") ~/
+      samplingMode
+    ).map { case (orReplace, asView, name, source, mode) =>
+      CreateSample(name, mode, source, orReplace, asView)
+    }
+
   )
 
   def dropAdaptive[_:P] = P(

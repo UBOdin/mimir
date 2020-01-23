@@ -145,7 +145,7 @@ object PullUpConstants extends OperatorOptimization with LazyLogging
       }
 
       // Don't try to descend into any of the following.
-      case _:AdaptiveView | _:View | _:HardTable | _:Table | _:Union  => (o, Map())
+      case _:AdaptiveView | _:View | _:HardTable | _:Table | _:Union | _:DrawSamples => (o, Map())
 
     }
   }
