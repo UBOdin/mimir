@@ -323,9 +323,12 @@ class RAToSpark(db: mimir.Database)
           true,
           mimirOpToSparkOp(src))
 			}
-			case _ => {
-			  throw new Exception("Operator Translation not implemented '"+oper+"'")
-			}
+      case DrawSamples(mode, src, seed, caveat) => {
+        mode.apply(
+          mimirOpToSparkOp(src),
+          seed
+        )
+      }
     }
   }
   
@@ -834,6 +837,33 @@ object RAToSpark {
     }
   }
   
+  def getNativeGeo(value:PrimitiveValue, t:Type): Any = {
+    value match {
+      case NullPrimitive() => t match {
+        case TInt() => 0L
+        case TFloat() => org.apache.spark.sql.types.Decimal(0)
+        case TDate() => this.defaultDate
+        case TString() => ""
+        case TBool() => new java.lang.Boolean(false)
+        case TRowId() => ""
+        case TType() => ""
+        case TAny() => ""
+        case TTimestamp() => this.defaultTimestamp
+        case TInterval() => ""
+        case TUser(name) => getNative(value, mimir.algebra.TypeRegistry.registeredTypes(name)._2)
+        case x => ""
+      }
+      case RowIdPrimitive(s) => s
+      case StringPrimitive(s) => s
+      case IntPrimitive(i) => i
+      case FloatPrimitive(f) => org.apache.spark.sql.types.Decimal(f)
+      case BoolPrimitive(b) => new java.lang.Boolean(b)
+      case ts@TimestampPrimitive(y,m,d,h,mm,s,ms) => SparkUtils.convertTimestamp(ts)
+      case dt@DatePrimitive(y,m,d) => SparkUtils.convertDate(dt)
+      case x =>  x.asString
+    }
+  }
+  
   def extractTables(oper: Operator): Seq[String] = 
   {
     oper match {
@@ -908,6 +938,13 @@ object RAToSpark {
     }
   }
   
+  def mimirPrimitiveToSparkInternalRowValueGeo(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case FloatPrimitive(f) => org.apache.spark.sql.types.Decimal(f)
+      case x =>  mimirPrimitiveToSparkInternalRowValue(x)
+    }
+  }
+  
   def sparkInternalRowValueToMimirPrimitive(sparkInternal :Any) : PrimitiveValue = {
     sparkInternal match {
       case null => NullPrimitive()
@@ -945,10 +982,24 @@ object RAToSpark {
     }
   }
   
+  def mimirPrimitiveToSparkExternalRowValueGeo(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case FloatPrimitive(f) => org.apache.spark.sql.types.Decimal(f)
+      case x => mimirPrimitiveToSparkExternalRowValue(x)
+    }
+  }
+  
   def mimirPrimitiveToSparkInternalInlineFuncParam(primitive : PrimitiveValue) : Any = {
     primitive match {
       case IntPrimitive(i) => i.toInt
       case x =>  mimirPrimitiveToSparkInternalRowValue(x)
+    }
+  }
+  
+  def mimirPrimitiveToSparkInternalInlineFuncParamGeo(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkInternalRowValueGeo(x)
     }
   }
   
@@ -963,6 +1014,23 @@ object RAToSpark {
     MimirSpark.get.sparkSession.sqlContext.createDataset(
       Seq(Row(primitives.zip(schema).map(prim => {
           val native = getNative(prim._1,prim._2._2)
+          println(s"native for ${prim._2._1}: $native")
+          native
+        }):_*)))(RowEncoder(mimirSchemaToStructType(schema)))
+    
+  }
+  
+  def mimirPrimitiveToSparkExternalInlineFuncParamGeo(primitive : PrimitiveValue) : Any = {
+    primitive match {
+      case IntPrimitive(i) => i.toInt
+      case x =>  mimirPrimitiveToSparkExternalRowValueGeo(x)
+    }
+  }
+  
+  def mimirPrimitivesToSparkExternalRowGeo(schema:Seq[(ID, Type)], primitives : Seq[PrimitiveValue]) : Dataset[Row] = {
+    MimirSpark.get.sparkSession.sqlContext.createDataset(
+      Seq(Row(primitives.zip(schema).map(prim => {
+          val native = getNativeGeo(prim._1,prim._2._2)
           println(s"native for ${prim._2._1}: $native")
           native
         }):_*)))(RowEncoder(mimirSchemaToStructType(schema)))

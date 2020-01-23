@@ -225,7 +225,11 @@ object SparkUtils {
          "mimir.algebra.RowIdPrimitive",
          "mimir.algebra.StringPrimitive",
          "mimir.algebra.Function",
-         "mimir.algebra.CastExpression").map( className => 
+         "mimir.algebra.CastExpression",
+         "mimir.algebra.DrawSamples",
+         "mimir.algebra.sampling.SampleRowsUniformly",
+         "mimir.algebra.sampling.SampleStratifiedOn"
+       ).map( className => 
        Class.forName(className)).toArray
   }
   

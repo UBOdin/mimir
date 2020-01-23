@@ -394,7 +394,10 @@ object OperatorDeterminism
               Var(rightCol),
               condDeterminism
             )) 
-        ).removeColumnsByID(leftCol, rightCol)}
+        ).removeColumnsByID(leftCol, rightCol)
+      }
+
+      case d:DrawSamples => d.recur { compile(_, models) }
     }
   }
   

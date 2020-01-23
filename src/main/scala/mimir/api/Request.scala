@@ -360,3 +360,32 @@ object SchemaForQueryRequest {
 implicit val format: Format[SchemaForQueryRequest] = Json.format
 }
 
+
+case class CreateSampleRequest (
+            /* query string to get schema for - table name */
+                  source: String,
+            /* mode configuration */
+                  samplingMode: mimir.algebra.sampling.SamplingMode,
+            /* seed - optional long */
+                  seed: Option[Long]
+) extends Request {
+  def handle(os:OutputStream) = {
+    val viewName = s"SAMPLE_${(source+samplingMode.toString+seed.toString).hashCode().toString().replace("-", "")}"
+    MimirVizier.db.update(
+      mimir.parser.CreateSample(
+        sparsity.Name(viewName),
+        samplingMode,
+        sparsity.Name(source),
+        orReplace = true,
+        asView = true, 
+        seed = seed
+      )
+    )
+    os.write(Json.stringify(Json.toJson(CreateSampleResponse(viewName))).getBytes)
+  }
+}
+
+object CreateSampleRequest {
+implicit val format: Format[CreateSampleRequest] = Json.format
+}
+

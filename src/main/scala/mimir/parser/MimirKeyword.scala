@@ -26,7 +26,10 @@ object MimirKeyword
         "RELOAD",
         "SCHEMA",
         "STAGING",
-        "USING"
+        "USING",
+        "SAMPLE",
+        "FRACTION",
+        "STRATIFIED"
       ).! ~ !CharIn("a-zA-Z0-9_") 
     )
   )

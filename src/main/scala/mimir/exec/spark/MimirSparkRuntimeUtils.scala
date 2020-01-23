@@ -40,7 +40,10 @@ object MimirSparkRuntimeUtils
 
   def writeDataSink(dataframe:DataFrame, format:String, options:Map[String, String], save:Option[String]) = {
     val dsFormat = dataframe.write.format(format) 
-    val dsOptions = options.toSeq.foldLeft(dsFormat)( (ds, opt) => ds.option(opt._1, opt._2))
+    val dsOptions = options.toSeq.foldLeft(dsFormat)( (ds, opt) => opt._1 match { 
+      case "mode" => ds.mode(opt._2) 
+      case _ => ds.option(opt._1, opt._2)
+      })
     save match {
       case None => dsOptions.save
       case Some(outputFile) => {

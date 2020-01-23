@@ -405,8 +405,8 @@ class TupleBundle(seeds: Seq[Long] = (0l until 10l).toSeq)
       case View(_, query, _) =>  compileFlat(query, models)
       case AdaptiveView(_, _, query, _) =>  compileFlat(query, models)
 
-      case ( Sort(_,_) | Limit(_,_,_) | LeftOuterJoin(_,_,_) ) =>
-        throw new RAException("Tuple-Bundler presently doesn't support LeftOuterJoin, Sort, or Limit (probably need to resort to 'Long' evaluation)")
+      case ( Sort(_,_) | Limit(_,_,_) | LeftOuterJoin(_,_,_) | DrawSamples(_, _, _, _) ) =>
+        throw new RAException("Tuple-Bundler presently doesn't support LeftOuterJoin, Sort, Sample, or Limit (probably need to resort to 'Long' evaluation)")
     }
   }
 

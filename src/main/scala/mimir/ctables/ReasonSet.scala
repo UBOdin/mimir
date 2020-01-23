@@ -7,7 +7,12 @@ import mimir.algebra._
 import mimir.models._
 import mimir.exec.mode.UnannotatedBestGuess
 
-class ReasonSet(val model: Model, val idx: Int, val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])], val toReason: ((Seq[PrimitiveValue], Seq[PrimitiveValue]) => Reason))
+class ReasonSet(
+  val model: Model, 
+  val idx: Int, 
+  val argLookup: Option[(Operator, Seq[Expression], Seq[Expression])], 
+  val toReason: ((Seq[PrimitiveValue], Seq[PrimitiveValue]) => Reason)
+)
 {
   def isEmpty(db: Database): Boolean =
   {

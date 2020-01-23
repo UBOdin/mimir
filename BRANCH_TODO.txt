@@ -1,8 +1,0 @@
-- [x] Finish and test SparkSchemaProvider
-- [x] BulkStorageProvider
-- [x] BulkStorageProvider support for LoadedTables
-- [x] Materialized Views
-- [x] Make DROP TABLE drop supporting views as well
-- [x] Add staging option to LOAD TABLE command
-- [ ] Ensure test cases pass
-- [x] Documentation

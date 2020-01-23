@@ -46,6 +46,9 @@ import java.io.FileInputStream
 import java.nio.file.Paths
 import java.net.InetAddress
     
+import org.datasyslab.geospark.serde.GeoSparkKryoRegistrator
+import org.datasyslab.geosparksql.utils.GeoSparkSQLRegistrator
+import org.apache.spark.sql.geosparksql.expressions.ST_Point
 
 object MimirSpark
   extends LazyLogging
@@ -163,6 +166,9 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, s"sparsity_${scalaVersion}-1.6.jar", new File(getJarPath("info.mimirdb", "sparsity", "1.6", scalaVersion)), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"fastparse_${scalaVersion}-2.1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.lihaoyi/fastparse_${scalaVersion}/jars/fastparse_${scalaVersion}-2.1.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
+      //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
+      //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
+       HadoopUtils.writeToHDFS(sparkCtx, "geospark-sql_2.3-1.2.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.datasyslab/geospark-sql_2.3/jars/geospark-sql_2.3-1.2.0.jar"), overwriteJars)
       
       sparkCtx.addJar(s"${hdfsPath}mimir-core_${scalaVersion}-0.3.jar")
       sparkCtx.addJar(s"${hdfsPath}scala-logging_${scalaVersion}-3.9.0.jar")       
@@ -180,6 +186,7 @@ object MimirSpark
       sparkCtx.addJar(s"${hdfsPath}sparsity_${scalaVersion}-1.6.jar")
       sparkCtx.addJar(s"${hdfsPath}fastparse_${scalaVersion}-2.1.0.jar")
       sparkCtx.addFile(s"${hdfsPath}$credentialName")
+      sparkCtx.addJar(s"$hdfsHome/geospark-sql_2.3-1.2.0.jar")
       
       FileUtils.getListOfFiles(config.sparkJars()).map(file => {
         if(file.getName.endsWith(".jar")){
@@ -217,6 +224,7 @@ object MimirSpark
     }
 
     sparkSql = sparkSession.sqlContext//new SQLContext(sparkCtx)
+    GeoSparkSQLRegistrator.registerAll(sparkSql.sparkSession)  
   }
   
   def getJarPath(repoPath:String, libName:String, libVersion:String, scalaVersion:String):String = {
@@ -271,41 +279,76 @@ object MimirSpark
            .catalog
            .listFunctions("mimir")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
-          val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
-          if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
-            logger.debug("registering spark function: " + fidentifier.funcName)
-            SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
-              val sparkInputs = inputs.map(inp => Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
-              val sparkInternal = inputs.map(inp => RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
-              val sparkRow = InternalRow(sparkInternal:_*)
-              val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
-                                .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
-              val sparkRes = sparkFunc.eval(sparkRow)
-              sparkFunc.dataType match {
-                  case LongType => IntPrimitive(sparkRes.asInstanceOf[Long])
-                  case IntegerType => IntPrimitive(sparkRes.asInstanceOf[Int].toLong)
-                  case FloatType => FloatPrimitive(sparkRes.asInstanceOf[Float])
-                  case DoubleType => FloatPrimitive(sparkRes.asInstanceOf[Double])
-                  case ShortType => IntPrimitive(sparkRes.asInstanceOf[Short].toLong)
-                  case DateType => SparkUtils.convertDate(sparkRes.asInstanceOf[java.sql.Date])
-                  case BooleanType => BoolPrimitive(sparkRes.asInstanceOf[Boolean])
-                  case TimestampType => SparkUtils.convertTimestamp(sparkRes.asInstanceOf[java.sql.Timestamp])
-                  case x => {
-                    sparkRes match {
-                      case null => NullPrimitive()
-                      case _ => StringPrimitive(sparkRes.toString())
-                    }
+          val fInfo = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
+          val isGeosparkFunction = fidentifier.toString().startsWith("st_")
+          if(fInfo != null){
+            val fClassName = fInfo.getClassName
+            if(fClassName != null && !fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+              logger.debug("registering spark function: " + fidentifier.funcName)
+              SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
+                val sparkInputs = inputs.map(inp => 
+                  if(isGeosparkFunction){
+                    Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParamGeo(inp))
                   }
-                } 
-            }, 
-            (inputTypes) => {
-              val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
-              .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
-            })
-          } 
+                  else{
+                    Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParam(inp))
+                  })
+                val sparkInternal = inputs.map(inp => 
+                  if(isGeosparkFunction){
+                    RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParamGeo(inp)
+                  }
+                  else {
+                    RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParam(inp)
+                  })
+                val sparkRow = InternalRow(sparkInternal:_*)
+                val sparkFunc = if(isGeosparkFunction){
+                  val constructors = Class.forName(fClassName.replaceAll("\\$", "")).getDeclaredConstructors
+                  val constructor = constructors.head
+                  constructor.setAccessible(true)
+                  constructor.newInstance(sparkInputs)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
+                }
+                else{
+                  val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
+                                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
+                }
+                val sparkRes = sparkFunc.eval(sparkRow)
+                sparkFunc.dataType match {
+                    case LongType => IntPrimitive(sparkRes.asInstanceOf[Long])
+                    case IntegerType => IntPrimitive(sparkRes.asInstanceOf[Int].toLong)
+                    case FloatType => FloatPrimitive(sparkRes.asInstanceOf[Float])
+                    case DoubleType => FloatPrimitive(sparkRes.asInstanceOf[Double])
+                    case ShortType => IntPrimitive(sparkRes.asInstanceOf[Short].toLong)
+                    case DateType => SparkUtils.convertDate(sparkRes.asInstanceOf[java.sql.Date])
+                    case BooleanType => BoolPrimitive(sparkRes.asInstanceOf[Boolean])
+                    case TimestampType => SparkUtils.convertTimestamp(sparkRes.asInstanceOf[java.sql.Timestamp])
+                    case x => {
+                      sparkRes match {
+                        case null => NullPrimitive()
+                        case _ => StringPrimitive(sparkRes.toString())
+                      }
+                    }
+                  } 
+              }, 
+              (inputTypes) => {
+                if(isGeosparkFunction){
+                  val inputs = inputTypes.map(inp => Literal(RAToSpark.getNativeGeo(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  val constructors = Class.forName(fClassName.replaceAll("\\$", "")).getDeclaredConstructors
+                  val constructor = constructors.head
+                  constructor.setAccessible(true)
+                  RAToSpark.getMimirType( constructor.newInstance(inputs)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+                }
+                else{
+                  val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+                }
+              })
+            } 
+          }
       } }
     SparkFunctions.register(fr)
   }
@@ -318,7 +361,7 @@ object MimirSpark
            .listFunctions("mimir")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).flatMap{ case (fidentifier, fname) => {
           val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
-          if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+          if(fClassName != null && fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             Some((fidentifier.funcName, 
             (inputTypes:Seq[Type]) => {
               val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
