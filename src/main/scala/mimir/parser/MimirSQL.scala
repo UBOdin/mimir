@@ -59,7 +59,7 @@ object MimirSQL
     | compare
     | createAdaptive // must come before 'basicStatement'
     | createLens     // must come before 'basicStatement'
-    | (&( MimirKeyword("CREATE") ) ~/ createSample)   // must come before 'basicStatement'
+    | createSample   // must come before 'basicStatement'
     | dropAdaptive   // must come before 'basicStatement'
     | dropLens       // must come before 'basicStatement'
     | drawPlot
