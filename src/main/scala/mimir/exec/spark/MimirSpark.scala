@@ -226,7 +226,7 @@ object MimirSpark
     }
 
     sparkSql = sparkSession.sqlContext//new SQLContext(sparkCtx)
-    GeoSparkSQLRegistrator.registerAll(sparkSql.sparkSession)  
+    GeoSparkSQLRegistrator.registerAll(sparkSession)  
   }
   
   def getJarPath(repoPath:String, libName:String, libVersion:String, scalaVersion:String):String = {
