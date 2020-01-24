@@ -6,7 +6,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.Database
 import mimir.algebra._
 import mimir.util.StringUtils
-import mimir.serialization.Json
+import mimir.serialization.AlgebraJson._
 
 
 class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValue])
@@ -68,9 +68,9 @@ class DrawnFromDomain(var column: ID, var t: Type, var domain: Set[PrimitiveValu
     "data"  -> JsObject(Map[String,JsValue](
       "column" -> JsString(column.id),
       "domain" -> JsArray(
-        domain.toSeq.map { Json.ofPrimitive(_) }
+        domain.toSeq.map { Json.toJson(_) }
       ),
-      "type"   -> Json.ofType(t)
+      "type"   -> Json.toJson(t)
     ))
   ))
 
@@ -141,9 +141,9 @@ class DrawnFromRange(column: ID, t: Type, low:PrimitiveValue, high:PrimitiveValu
     "facet" -> JsString("DRAWN_FROM_RANGE"),
     "data"  -> JsObject(Map[String,JsValue](
       "column" -> JsString(column.id),
-      "low"    -> Json.ofPrimitive(low),
-      "high"   -> Json.ofPrimitive(high),
-      "type"   -> Json.ofType(t)
+      "low"    -> Json.toJson(low),
+      "high"   -> Json.toJson(high),
+      "type"   -> Json.toJson(t)
     ))
   ))
 }
@@ -229,23 +229,23 @@ object ExpectedValues
         fields.get("facet") match {
           case Some(JsString("DRAWN_FROM_DOMAIN")) => {
             val data = fields("data").as[JsObject].value
-            val t = Json.toType(data("type"))
+            val t = data("type").as[Type]
             Some(new DrawnFromDomain(
               ID(data("column").as[JsString].value),
               t,
               data("domain").as[JsArray].value
-                .map { Json.toPrimitive(t, _) }
+                .map { castJsonToPrimitive(t, _) }
                 .toSet
             ))
           }
           case Some(JsString("DRAWN_FROM_RANGE")) => {
             val data = fields("data").as[JsObject].value
-            val t = Json.toType(data("type"))
+            val t = data("type").as[Type]
             Some(new DrawnFromRange(
               ID(data("column").as[JsString].value),
               t,
-              Json.toPrimitive(t, data("low")),
-              Json.toPrimitive(t, data("high"))
+              castJsonToPrimitive(t, data("low")),
+              castJsonToPrimitive(t, data("high"))
             ))
           }
           case _ => None

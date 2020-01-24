@@ -233,7 +233,7 @@ object OperatorUtils extends LazyLogging {
         findRenamingConflicts(name, src)
       case LeftOuterJoin(lhs, rhs, cond) =>
         findRenamingConflicts(name, lhs) ++ findRenamingConflicts(name, rhs)
-      case DrawSamples(_, source, _, _) => 
+      case DrawSamples(_, source, _) => 
         findRenamingConflicts(name, source)
     }
   }
@@ -321,7 +321,7 @@ object OperatorUtils extends LazyLogging {
           oper
         )
       }
-      case Sort(_, _) | Select(_, _) | Limit(_, _, _) | DrawSamples(_,_,_,_) =>
+      case Sort(_, _) | Select(_, _) | Limit(_, _, _) | DrawSamples(_,_,_) =>
         oper.
           recurExpressions(rewrite(_)).
           recur(deepRenameColumn(target, replacement, _))

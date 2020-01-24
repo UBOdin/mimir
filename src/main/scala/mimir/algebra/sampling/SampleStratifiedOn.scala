@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{ LogicalPlan, Filter }
 import play.api.libs.json._
 import mimir.algebra._
 import mimir.exec.spark.RAToSpark
-import mimir.serialization.{ Json => MimirJson }
+import mimir.serialization.AlgebraJson._
 
 /** 
  * Generate a sample of the dataset stratified on the specified column
@@ -60,12 +60,12 @@ case class SampleStratifiedOn(column:ID, t:Type, strata:Map[PrimitiveValue,Doubl
   def toJson: JsValue = JsObject(Map[String,JsValue](
     "mode" -> JsString(SampleStratifiedOn.MODE),
     "column" -> JsString(column.id),
-    "type" -> MimirJson.ofType(t),
+    "type" -> Json.toJson(t),
     "strata" -> JsArray(
       strata
         .toSeq
         .map { case (v, p) => JsObject(Map[String,JsValue](
-            "value" -> MimirJson.ofPrimitive(v),
+            "value" -> Json.toJson(v),
             "probability" -> JsNumber(p)
           ))
         }
@@ -80,7 +80,7 @@ object SampleStratifiedOn
   def parseJson(json:Map[String, JsValue]): Option[SampleStratifiedOn] =
   {
     if(json("mode").as[String].equals(MODE)){
-      val t = MimirJson.toType(json("type"))
+      val t = json("type").as[Type]
 
       Some(SampleStratifiedOn(
         ID(json("column").as[String]),
@@ -88,7 +88,7 @@ object SampleStratifiedOn
         json("strata")
           .as[Seq[Map[String,JsValue]]]
           .map { stratum => 
-            MimirJson.toPrimitive(t, stratum("value")) -> 
+            castJsonToPrimitive(t, stratum("value")) -> 
               stratum("probability").as[Double]
           }
           .toMap

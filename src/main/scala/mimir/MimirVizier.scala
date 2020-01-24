@@ -440,7 +440,7 @@ object MimirVizier extends LazyLogging {
                     params.mkString(",") + "] [" + _type + "]"  ) ;
       
       val parsedParams = Json.parse(params)
-      val lensNameBase = (input.toString() + _type + params + make_input_certain + materialize).hashCode()
+      val lensNameBase = (input.toString() + _type + params + materialize).hashCode()
       val inputQuery = s"SELECT * FROM ${input}"
 
       val lensName = "LENS_" + _type + (lensNameBase.toString().replace("-", ""))
@@ -890,7 +890,7 @@ object MimirVizier extends LazyLogging {
         }
     }
     logger.debug(s"explainCell Took: ${timeRes._2}")
-    val reasonStrs = timeRes._1.map(_.toJSON)
+    val reasonStrs = timeRes._1.map { Json.toJson(_) } 
     val reasonStrsSet = reasonStrs.toSet
     //TODO: mike - remove this work-around for filtering out duplicate reasons for cell
     //  from shapedetector.  I think the problem is related to appliestocolumn because the

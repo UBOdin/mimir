@@ -294,7 +294,7 @@ object OperatorDeterminism
         ).removeColumnsByID(leftCol, rightCol)
       }
 
-      case d:DrawSamples => d.recur { compile(_, models) }
+      case d:DrawSamples => d.recur { compile(_) }
     }
   }
   

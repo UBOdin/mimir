@@ -175,7 +175,7 @@ object ProjectRedundantColumns extends OperatorOptimization {
         )
       }
 
-      case d@DrawSamples(mode, source, seed, caveat) => {
+      case d@DrawSamples(mode, source, seed) => {
         val localDeps = mode.expressions
                        .flatMap { ExpressionUtils.getColumns(_) }
                        .toSet

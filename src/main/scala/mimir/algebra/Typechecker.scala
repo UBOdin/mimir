@@ -251,7 +251,7 @@ class Typechecker(
 
 			case Sort(_, src) => schemaOf(src)
 
-			case DrawSamples(_, src, _, _) => schemaOf(src)
+			case DrawSamples(_, src, _) => schemaOf(src)
 		}
 	}
 }

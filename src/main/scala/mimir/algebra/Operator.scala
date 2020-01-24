@@ -435,13 +435,13 @@ case class LensView(schema: Option[ID], name: ID, query: Operator, annotations: 
  * 
  * See SamplingMode above for different sampling strategies
  */
-case class DrawSamples(mode: SamplingMode, source: Operator, seed: Long, caveat: Option[(ID,String)] = None)
+case class DrawSamples(mode: SamplingMode, source: Operator, seed: Long)
   extends Operator
 {
   def children: Seq[Operator] = Seq(source)
   def expressions: Seq[Expression] = mode.expressions
-  def rebuild(c: Seq[Operator]) = DrawSamples(mode, c(0), seed, caveat)
-  def rebuildExpressions(x: Seq[Expression]) = DrawSamples(mode.rebuildExpressions(x), source, seed, caveat)
+  def rebuild(c: Seq[Operator]) = DrawSamples(mode, c(0), seed)
+  def rebuildExpressions(x: Seq[Expression]) = DrawSamples(mode.rebuildExpressions(x), source, seed)
   def toString(prefix: String): String = 
     s"${prefix}SAMPLE $mode [\n${source.toString(prefix+"  ")}\n$prefix] WITH SEED $seed"
   def columnNames = source.columnNames

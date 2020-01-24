@@ -321,7 +321,7 @@ class RAToSpark(db: mimir.Database)
           true,
           mimirOpToSparkOp(src))
 			}
-      case DrawSamples(mode, src, seed, caveat) => {
+      case DrawSamples(mode, src, seed) => {
         mode.apply(
           mimirOpToSparkOp(src),
           seed

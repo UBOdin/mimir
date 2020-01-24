@@ -206,37 +206,32 @@ trait OperatorConstructors
 
   def sampleUniformly(
     p: Double, 
-    seed:Option[Long] = None, 
-    caveat:Option[(ID,String)] = None
+    seed:Option[Long] = None
   ): Operator =
     DrawSamples( 
       SampleRowsUniformly(p), 
       toOperator, 
-      seed.getOrElse(new Random().nextLong()), 
-      caveat 
+      seed.getOrElse(new Random().nextLong())
     )
   
   def stratifiedSample(
     col: String, 
     colType: Type,
     strata: Map[PrimitiveValue, Double], 
-    seed:Option[Long] = None, 
-    caveat:Option[(ID,String)] = None
+    seed:Option[Long] = None
   ): Operator =
-    stratifiedSampleByID(ID(col), colType, strata, seed, caveat)
+    stratifiedSampleByID(ID(col), colType, strata, seed)
 
   def stratifiedSampleByID(
     col: ID, 
     colType: Type,
     strata: Map[PrimitiveValue, Double], 
-    seed:Option[Long] = None, 
-    caveat:Option[(ID,String)] = None
+    seed:Option[Long] = None
   ): Operator =
     DrawSamples( 
       SampleStratifiedOn(col, colType, strata), 
       toOperator, 
-      seed.getOrElse(new Random().nextLong()), 
-      caveat 
+      seed.getOrElse(new Random().nextLong())
     )
 
 }

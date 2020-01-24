@@ -138,19 +138,12 @@ object AlgebraJsonCodecs
           "source" -> ofOperator(source)
         ))
 
-      case DrawSamples(mode, source, seed, caveat) => 
+      case DrawSamples(mode, source, seed) => 
         JsObject(Map[String, JsValue](
           "type" -> JsString("draw_samples"),
           "mode" -> mode.toJson,
           "source" -> ofOperator(source),
-          "seed" -> JsNumber(seed),
-          "caveat" -> 
-            caveat.map { case (model, message) => 
-              JsObject(Map[String, JsValue](
-                "model" -> JsString(model.id),
-                "message" -> JsString(message)
-              ))
-            }.getOrElse(JsNull)
+          "seed" -> JsNumber(seed)
         ))
     }
   }
@@ -283,16 +276,7 @@ object AlgebraJsonCodecs
         DrawSamples(
           SamplingMode.fromJson(elems("mode")),
           toOperator(elems("source")),
-          elems("seed").as[Long],
-          elems("caveat") match {
-            case JsNull => None
-            case JsObject(caveat) => 
-              Some( (
-                ID(caveat("model").as[String]),
-                caveat("message").as[String]
-              ) )
-            case _ => throw new RAException(s"Invalid Draw Samples Serialization: $json")
-          }
+          elems("seed").as[Long]
         )
     }
 
