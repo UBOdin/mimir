@@ -241,6 +241,30 @@ class SqlParserSpec
 			}
 		}
 
+		"Parse queries with GROUP BY and ORDER BY clauses" >> {
+			LoggerUtils.trace(
+				// "mimir.sql.SqlToRA"
+			) { 
+				db.compiler.optimize(convert("""
+					SELECT `_c2`, AVG(`_c0`) AS A FROM R GROUP BY `_c2` ORDER BY `_c2`; 
+				""")) must be equalTo				
+					db.table("R")
+						.groupByParsed("_c2")(
+							"A" -> "AVG(`_c0`)"
+						)
+						.sort("_c2" -> true)
+
+				db.compiler.optimize(convert("""
+					SELECT `_c2`, AVG(`_c0`) AS A FROM R GROUP BY `_c2` ORDER BY R.`_c2`; 
+				""")) must be equalTo				
+					db.table("R")
+						.groupByParsed("_c2")(
+							"A" -> "AVG(`_c0`)"
+						)
+						.sort("_c2" -> true)
+			}
+		}
+
 		"Get the types right in aggregates" >> {
 			loadCSV( 
 				sourceFile = "test/data/Product_Inventory.csv",

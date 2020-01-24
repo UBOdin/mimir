@@ -116,9 +116,22 @@ object PushdownSelections extends OperatorOptimization {
 			// all of the variables that appear in the condition appear in the group-by
 			// clauses.
 			case Select(cond, Aggregate(gbcols, aggs, source)) 
-				if ExpressionUtils.getColumns(cond).map(Var(_)).forall( gbcols contains _ ) => {
+			  if ExpressionUtils.getColumns(cond).map(Var(_)).forall( gbcols contains _ ) => {
 				Aggregate(gbcols, aggs, apply(Select(cond, source)))
 			}
+			//TODO: mike: i am going to finish this after cidr
+			//  it is almost there but still a few things that should use 
+			//  code that is already implemented in ExpressionUtils 
+			//  that does not duplicate
+			/*if ExpressionUtils.getColumns(cond).map(Var(_))
+			  .foldLeft(false)((res, cvar) => (res || gbcols.contains(cvar)) ) => {
+  				val cnjToPushDown = ExpressionUtils.getConjuncts(cond).map( cnj => 
+			      ExpressionUtils.getColumns(cnj).flatMap(col => if(gbcols contains Var(col)) Some(cnj) else None)
+			    ).flatten.foldLeft(BoolPrimitive(true):Expression)((init, curr) => {
+			      Arithmetic(Arith.And, init, curr)
+			    })
+			    Select(cond,Aggregate(gbcols, aggs, apply(Select(cnjToPushDown, source))))
+			  }*/ 
 
 			// Otherwise, leave the select in place
 			case Select(cond, agg:Aggregate) => {

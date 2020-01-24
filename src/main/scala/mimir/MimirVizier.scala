@@ -26,7 +26,7 @@ import org.apache.spark.sql.SparkSession
 import mimir.algebra._
 import mimir.algebra.function.SparkFunctions
 import mimir.api.MimirAPI
-import mimir.api.{ScalaEvalResponse, CreateLensResponse, DataContainer, Schema}
+import mimir.api.{CodeEvalResponse, CreateLensResponse, DataContainer, Schema}
 import mimir.ctables.AnalyzeUncertainty
 import mimir.ctables.Reason
 import mimir.data.staging.{ RawFileProvider, LocalFSRawFileProvider }
@@ -39,12 +39,15 @@ import mimir.ml.spark.SparkML
 import mimir.parser._
 import mimir.parser.ExpressionParser
 import mimir.serialization.AlgebraJson
+import mimir.data.staging.HDFSRawFileProvider
 import mimir.util.{
   JSONBuilder,
   LoggerUtils,
   ExperimentalOptions,
   Timer
 }
+import java.sql.SQLException
+import mimir.ctables.CoarseDependency
 
 /**
  * The interface to Mimir for Vistrails.  Responsible for:
@@ -75,11 +78,19 @@ object MimirVizier extends LazyLogging {
     // For Vizier specifically, we want Derby/Hive support enabled
     ExperimentalOptions.enable("USE-DERBY")
     
+    val dataDir = new java.io.File(conf.dataDirectory())
+    if(!dataDir.exists())
+      dataDir.mkdirs()
+   
+    
     // Set up the database connection(s)
     val database = conf.dbname().split("[\\\\/]").last.replaceAll("\\..*", "")
     MimirSpark.init(conf)
     val metadata = new JDBCMetadataBackend(conf.metadataBackend(), conf.dbname())
-    val staging = new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
+    val staging = if(conf.dataStagingType().equalsIgnoreCase("hdfs") && ExperimentalOptions.isEnabled("remoteSpark"))
+      new HDFSRawFileProvider()
+    else 
+      new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
 
     db = new Database(metadata, staging)
     VizierDB.sparkSession = MimirSpark.get.sparkSession
@@ -103,8 +114,8 @@ object MimirVizier extends LazyLogging {
         else if(ExperimentalOptions.isEnabled("LOGO")) Level.OFF
         else Level.DEBUG
        
-      val mimirVizierLoggers = Seq("mimir.backend.SparkBackend", this.getClass.getName, 
-          "mimir.api.MimirAPI", "mimir.api.MimirVizierServlet")
+      val mimirVizierLoggers = Seq("mimir.exec.spark.RAToSpark", "mimir.exec.spark.MimirSpark", this.getClass.getName, 
+          "mimir.api.MimirAPI", "mimir.api.MimirVizierServlet", "mimir.data.staging.HDFSRawFileProvider")
       mimirVizierLoggers.map( mvLogger => {
         LoggerFactory.getLogger(mvLogger) match {
           case logger: Logger => {
@@ -175,17 +186,54 @@ object MimirVizier extends LazyLogging {
   //Mimir API impls
   ///////////////////////////////////////////////
   var apiCallThread : Thread = null
-  def evalScala(source : String) : ScalaEvalResponse = {
+  def evalScala(inputs:Map[String, String], source : String) : CodeEvalResponse = {
     try {
       val timeRes = logTime("evalScala") {
-        Eval("import mimir.MimirVizier.vizierdb\n"+source) : String
+        registerNameMappings(inputs)
+        Eval("import mimir.MimirVizier.VizierDB\n"+source) : String
       }
       logger.debug(s"evalScala Took: ${timeRes._2}")
-      ScalaEvalResponse(timeRes._1,"")
+      CodeEvalResponse(timeRes._1,"")
     } catch {
       case t: Throwable => {
         logger.error(s"Error Evaluating Scala Source", t)
-        ScalaEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
+        CodeEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
+      }
+    }
+  }
+  
+  
+  def evalR(source : String) : CodeEvalResponse = {
+    try {
+      val timeRes = logTime("evalR") {
+        val datasetMatch = """vizierdb\$getDataset\(\w*"([a-zA-Z0-9_-]+)"\w*\)""".r 
+        val (tmpNames, dsNames) = source.
+        split("\n").toSeq
+        .zipWithIndex
+        .flatMap(line => 
+          line._1 match {
+            case datasetMatch(dsName) => {
+              val tmpName = s"temp_view_${source.hashCode()}_${line._2}"
+              db.compiler.compileToSparkWithRewrites(db.table(dsName))
+                .createOrReplaceTempView(tmpName)
+                Some((tmpName, dsName))
+              }
+            case x => None
+        }).unzip
+        val rLibCode = s"""
+        print("mimir lib code")
+        """ + source
+        val R = org.ddahl.rscala.RClient("R",0,true)
+        val ret = R.evalS0(rLibCode)
+        R.quit()
+        ret
+      }
+      logger.debug(s"evalScala Took: ${timeRes._2}")
+      CodeEvalResponse(timeRes._1,"")
+    } catch {
+      case t: Throwable => {
+        logger.error(s"Error Evaluating R Source", t)
+        CodeEvalResponse("",s"Error Evaluating Scala Source: \n${t.getMessage()}\n${t.getStackTrace.mkString("\n")}\n${t.getMessage()}\n${t.getCause.getStackTrace.mkString("\n")}")
       }
     }
   }
@@ -243,7 +291,7 @@ object MimirVizier extends LazyLogging {
       }
     loadDataSource(file, format, inferTypes, detectHeaders, humanReadableName, backendOptions)
   }
-  def loadDataSource(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, humanReadableName:Option[String], backendOptions:Seq[Any]) : String = {
+  def loadDataSource(file : String, format:String, inferTypes:Boolean, detectHeaders:Boolean, humanReadableName:Option[String], backendOptions:Seq[Any], dependencies:Seq[String]=Seq()) : String = {
     try{
       apiCallThread = Thread.currentThread()
       val timeRes = logTime("loadDataSource") {
@@ -291,6 +339,16 @@ object MimirVizier extends LazyLogging {
           stageSourceURL = true
         )
       }
+      val (realTargetSchema, realTarget, _) = 
+            db.catalog.resolveTable(tableName)
+                   .getOrElse { throw new SQLException(s"Unknown target table ${tableName}")}
+      val targetTable = (realTargetSchema, realTarget)
+      dependencies.foreach(dependency => {
+        val (realSourceSchema, realSource, _) = 
+              db.catalog.resolveTableCaseInsensitive(dependency)
+                     .getOrElse { throw new SQLException(s"Unknown dependent table ${dependency}") }
+        db.catalog.createDependency(targetTable, CoarseDependency(realSourceSchema, realSource))
+      })
       tableName 
     }
     logger.debug(s"loadDataSource ${timeRes._1.toString} Took: ${timeRes._2}")
@@ -303,7 +361,7 @@ object MimirVizier extends LazyLogging {
     }
   }
   
-  def unloadDataSource(input:String, file : String, format:String, backendOptions:Seq[Any]) : Unit = {
+  def unloadDataSource(input:String, file : String, format:String, backendOptions:Seq[Any]) : List[String] = {
     try{
       val timeRes = logTime("loadDataSource") {
         logger.debug("unloadDataSource: From Vistrails: [" + input + "] [" + file + "] [" + format + "] [ " + backendOptions.mkString(",") + " ]"  ) ;
@@ -325,8 +383,15 @@ object MimirVizier extends LazyLogging {
             bkOpts.toMap, 
             if(file == null || file.isEmpty()) None else Some(file)
           )
+          if(!(file == null || file.isEmpty())){
+            val filedir = new File(file)
+            filedir.listFiles.filter(_.isFile)
+              .map(_.getName).toList
+          }
+          else List[String]()
       }
       logger.debug(s"unloadDataSource Took: ${timeRes._2}")
+      timeRes._1
     } catch {
       case t: Throwable => {
         logger.error(s"Error Unloading Data: $file", t)
@@ -349,7 +414,6 @@ object MimirVizier extends LazyLogging {
     input : Any, 
     params : JsValue, 
     _type : String, 
-    make_input_certain:Boolean, 
     materialize:Boolean, 
     humanReadableName: Option[String]
   ) : CreateLensResponse = {
@@ -357,7 +421,6 @@ object MimirVizier extends LazyLogging {
       input              = input, 
       params             = params,
       _type              = _type, 
-      make_input_certain = make_input_certain, 
       materialize        = materialize,
       humanReadableName  = humanReadableName
     )
@@ -367,7 +430,6 @@ object MimirVizier extends LazyLogging {
     input : Any, 
     params : String, 
     _type : String, 
-    make_input_certain:Boolean, 
     materialize:Boolean, 
     humanReadableName: Option[String]
   ) : CreateLensResponse = {
@@ -395,35 +457,8 @@ object MimirVizier extends LazyLogging {
         db.lenses.drop(ID(lensName))
       } else {
         // Need to create the lens if it doesn't already exist.
-
         // query is a var because we might need to rewrite it below.
         var query:Operator = db.catalog.tableOperator(Name(input.toString))
-
-
-        // "Make Certain" was previously implemented by dumping the lens 
-        // contents into a temporary table.  This is... messy.  
-
-        // Oliver @ June 7, 2019: Disabling Make Certain until 
-        // https://github.com/UBOdin/mimir/issues/331 is resolved
-        // and/or we get support for updates back into Mimir.
-
-        // if(make_input_certain){ 
-        //   val materializedInput = ID("MATERIALIZED_"+input)
-        //   val querySchema = db.typechecker.schemaOf(query)
-
-        //   if(db.catalog.tableExists(materializedInput)){
-        //     logger.debug("createLens: From Vistrails: Materialized Input Already Exists: " + 
-        //                  materializedInput)
-        //   } else { 
-        //     // TODO: R
-        //     // Dump the query into a table if necessary 
-        //     db.backend.createTable(materializedInput, query)
-        //   }
-
-        //   // And override the default lens input with the table.
-        //   query = db.table(materializedInput)
-        // }
-
         // Regardless of where we're reading from, next we need to run: 
         //   CREATE LENS ${lensName} 
         //            AS $query 
@@ -797,6 +832,8 @@ object MimirVizier extends LazyLogging {
     timeRes._1
   }
   
+  def explainCell(query: String, col:String, row:String) : Seq[mimir.ctables.Reason] = explainCell(query, ID(col), row)
+  
   def explainCell(query: String, col:ID, row:String) : Seq[mimir.ctables.Reason] = {
     try{
     logger.debug("explainCell: From Vistrails: [" + col + "] [ "+ row +" ] [" + query + "]"  ) ;
@@ -853,7 +890,14 @@ object MimirVizier extends LazyLogging {
         }
     }
     logger.debug(s"explainCell Took: ${timeRes._2}")
-    timeRes._1
+    val reasonStrs = timeRes._1.map(_.toJSON)
+    val reasonStrsSet = reasonStrs.toSet
+    //TODO: mike - remove this work-around for filtering out duplicate reasons for cell
+    //  from shapedetector.  I think the problem is related to appliestocolumn because the
+    //  reasons are duplicated the same number of times as there are number of columns
+    //  that the shapedetector facet applies to.  I will fix this correctly after cidr.
+    reasonStrsSet.map(reasonstr => 
+      reasonStrs.indexOf(reasonstr)).toSeq.map(idx => timeRes._1(idx))
     } catch {
       case t: Throwable => {
         logger.error("Error Explaining Cell: [" + col + "] [ "+ row +" ] [" + oper + "]", t)
@@ -1118,7 +1162,7 @@ object MimirVizier extends LazyLogging {
       while(results.hasNext){
         val row = results.next()
         resCSV += row.tuple 
-        prov += row.provenance.asString
+        prov += ""//row.provenance.asString
       }
       
       DataContainer(

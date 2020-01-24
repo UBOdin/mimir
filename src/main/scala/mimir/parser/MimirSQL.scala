@@ -13,6 +13,8 @@ import sparsity.expression.{Expression,StringPrimitive}
 import sparsity.Name
 import java.sql.SQLException
 import java.io.Reader
+import mimir.sql.SqlToRA
+import mimir.algebra.ID
 
 object MimirSQL
 {
@@ -62,6 +64,7 @@ object MimirSQL
     | alterTable
     | compare
     | createLens     // must come before 'basicStatement'
+    | createSample   // must come before 'basicStatement'
     | dropLens       // must come before 'basicStatement'
     | drawPlot
     | load
@@ -156,6 +159,7 @@ object MimirSQL
       CreateLens(name, query, lensType, args)
     }
   )
+
   def dropLens[_:P] = P(
     (
       MimirKeyword("DROP") ~

@@ -84,7 +84,6 @@ class MimirVizierSpec
         "[\"BUS_SPEED_MHZ\"]",
         "DOMAIN",
         false,
-        false,
         Some("MISSING_CPUSPEED_BUS_SPEED_MHZ")
       )
       MimirVizier.db.query(
@@ -99,7 +98,6 @@ class MimirVizierSpec
         "PICK",
         "[\"B\"]",
         "MISSING_VALUE",
-        false,
         false,
         Some("MISSING_PICK_B")
       )

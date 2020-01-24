@@ -11,13 +11,14 @@ import java.io.BufferedOutputStream
 import org.apache.spark.SparkContext
 import java.io.BufferedInputStream
 import org.apache.hadoop.fs.permission.FsPermission
+import java.io.InputStream
 
 /**
 * @author ${user.name}
 */
 object HadoopUtils {
 
-  def writeToHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, localFile:File, overwrite:Boolean = false) {
+  def writeToHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, input:InputStream, overwrite:Boolean ) {
     val fs = FileSystem.get(sparkCtx.hadoopConfiguration)
     //fs.copyFromLocalFile(false, new Path(localFile.toURI()), new Path(hdfsTargetFile))
     val hdfsPath = new Path(hdfsTargetFile)
@@ -38,8 +39,6 @@ object HadoopUtils {
     val output = fs.create(hdfsPath, overwrite)
     val writer = new BufferedOutputStream(output)
     try {
-      val srcUrl = if(localFile.getPath.contains(":/")) new java.net.URL(localFile.getPath.replaceFirst(":/", "://")) else localFile.toURI().toURL()
-      val input = new BufferedInputStream(srcUrl.openStream)
       val bytes = new Array[Byte](1024) //1024 bytes - Buffer size
       Iterator
       .continually (input.read(bytes))
@@ -56,6 +55,17 @@ object HadoopUtils {
          catch {
            case t: Throwable => t.printStackTrace() // TODO: handle error
          }
+    }
+  }
+  
+  def writeToHDFS(sparkCtx:SparkContext, hdfsTargetFile:String, localFile:File, overwrite:Boolean = false) {
+    try {
+      val srcUrl = if(localFile.getPath.contains(":/")) new java.net.URL(localFile.getPath.replaceFirst(":/", "://")) else localFile.toURI().toURL()
+      val input = new BufferedInputStream(srcUrl.openStream)
+      writeToHDFS(sparkCtx, hdfsTargetFile, input, overwrite)
+    }
+    catch {
+      case t: Throwable => t.printStackTrace() // TODO: handle error
     }
   }
   

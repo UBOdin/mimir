@@ -4,6 +4,7 @@ import play.api.libs.json._
 
 import mimir.Database
 import mimir.algebra._
+import mimir.algebra.sampling.SamplingMode
 import mimir.util._
 import mimir.views.ViewAnnotation
 import play.api.libs.json.Reads._ // Custom validation helpers
@@ -136,6 +137,21 @@ object AlgebraJsonCodecs
             }),
           "source" -> ofOperator(source)
         ))
+
+      case DrawSamples(mode, source, seed, caveat) => 
+        JsObject(Map[String, JsValue](
+          "type" -> JsString("draw_samples"),
+          "mode" -> mode.toJson,
+          "source" -> ofOperator(source),
+          "seed" -> JsNumber(seed),
+          "caveat" -> 
+            caveat.map { case (model, message) => 
+              JsObject(Map[String, JsValue](
+                "model" -> JsString(model.id),
+                "message" -> JsString(message)
+              ))
+            }.getOrElse(JsNull)
+        ))
     }
   }
   def toOperator(json: JsValue): Operator = 
@@ -262,6 +278,21 @@ object AlgebraJsonCodecs
         Union(
           toOperator(elems("left")),
           toOperator(elems("right"))
+        )
+      case "draw_samples" =>
+        DrawSamples(
+          SamplingMode.fromJson(elems("mode")),
+          toOperator(elems("source")),
+          elems("seed").as[Long],
+          elems("caveat") match {
+            case JsNull => None
+            case JsObject(caveat) => 
+              Some( (
+                ID(caveat("model").as[String]),
+                caveat("message").as[String]
+              ) )
+            case _ => throw new RAException(s"Invalid Draw Samples Serialization: $json")
+          }
         )
     }
 

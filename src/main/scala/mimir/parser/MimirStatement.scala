@@ -81,3 +81,12 @@ case class AlterTable(
   target: Name,
   op: AlterTableOperation
 ) extends MimirStatement
+
+case class CreateSample(
+  name: Name,
+  mode: mimir.algebra.sampling.SamplingMode,
+  source: Name,
+  orReplace: Boolean,
+  asView: Boolean = true,
+  seed: Option[Long] = None
+) extends MimirStatement

@@ -2,6 +2,7 @@ package mimir.algebra;
 
 import mimir.util.ListUtils
 import mimir.views.ViewAnnotation
+import mimir.algebra.sampling.SamplingMode
 
 /**
  * Abstract parent class of all relational algebra operators
@@ -426,4 +427,22 @@ case class LensView(schema: Option[ID], name: ID, query: Operator, annotations: 
   def toString(prefix: String): String = 
     s"$prefix${schema.map{_+"."}.getOrElse{""}}$name[${annotations.mkString(", ")}] := (\n${query.toString(prefix+"   ")}\n$prefix)"
   def columnNames = query.columnNames
+}
+
+
+/**
+ * Reduce the size of the input dataset down to a specific sample.
+ * 
+ * See SamplingMode above for different sampling strategies
+ */
+case class DrawSamples(mode: SamplingMode, source: Operator, seed: Long, caveat: Option[(ID,String)] = None)
+  extends Operator
+{
+  def children: Seq[Operator] = Seq(source)
+  def expressions: Seq[Expression] = mode.expressions
+  def rebuild(c: Seq[Operator]) = DrawSamples(mode, c(0), seed, caveat)
+  def rebuildExpressions(x: Seq[Expression]) = DrawSamples(mode.rebuildExpressions(x), source, seed, caveat)
+  def toString(prefix: String): String = 
+    s"${prefix}SAMPLE $mode [\n${source.toString(prefix+"  ")}\n$prefix] WITH SEED $seed"
+  def columnNames = source.columnNames
 }

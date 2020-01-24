@@ -12,17 +12,23 @@ object Request {
   
 }
 
-case class ScalaEvalRequest (
+case class CodeEvalRequest (
             /* scala source code to evaluate*/
+                  input: Map[String,String],
+                  language: String,
                   source: String
 ) extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(MimirVizier.evalScala(source))).getBytes )
+    language match {
+      case "R" => os.write(Json.stringify(Json.toJson(MimirVizier.evalR(source))).getBytes )
+      case "scala" => os.write(Json.stringify(Json.toJson(MimirVizier.evalScala(input, source))).getBytes )
+    }
+    
   }
 }
 
-object ScalaEvalRequest {
-  implicit val format: Format[ScalaEvalRequest] = Json.format
+object CodeEvalRequest {
+  implicit val format: Format[CodeEvalRequest] = Json.format
 }
 
 
@@ -38,7 +44,9 @@ case class LoadRequest (
             /* optionally provide a name */
                   humanReadableName: Option[String],
             /* options for spark datasource api */
-                  backendOption: Seq[Tuple]
+                  backendOption: Seq[Tuple],
+            /* optionally provide dependencies */
+                  dependencies: Seq[String]
 ) extends Request {
   def handle(os:OutputStream) = {
     os.write(Json.stringify(Json.toJson(LoadResponse(
@@ -48,7 +56,8 @@ case class LoadRequest (
         inferTypes, 
         detectHeaders, 
         humanReadableName, 
-        backendOption.map(tup => tup.name -> tup.value)
+        backendOption.map(tup => tup.name -> tup.value),
+        dependencies
       )
     ))).getBytes )
   }
@@ -70,12 +79,13 @@ case class UnloadRequest (
                   backendOption: Seq[Tuple]
 ) extends Request {
   def handle(os:OutputStream) = {
-    MimirVizier.unloadDataSource(
-      input, 
-      file, 
-      format, 
-      backendOption.map(tup => tup.name -> tup.value)
-    )
+    os.write(Json.stringify(Json.toJson(
+        UnloadResponse(MimirVizier.unloadDataSource(
+          input, 
+          file, 
+          format, 
+          backendOption.map(tup => tup.name -> tup.value))
+        ))).getBytes )
   }
 }
 
@@ -99,8 +109,7 @@ case class CreateLensRequest (
       MimirVizier.createLens(
         input, 
         params, 
-        `type`, 
-        false, 
+        `type`,  
         materialize, 
         humanReadableName = humanReadableName
       )
@@ -181,7 +190,7 @@ case class ExplainCellSchemaRequest (
             /* rowid of cell */
                   row: String,
             /* column of cell */
-                  col: Int
+                  col: String
 ) extends Request {
   def handle(os:OutputStream) = {
     os.write(Json.stringify(Json.toJson(ExplainReasonsResponse(MimirVizier.explainCell(query, col, row)))).getBytes )
@@ -289,5 +298,34 @@ case class SchemaForQueryRequest (
 
 object SchemaForQueryRequest {
 implicit val format: Format[SchemaForQueryRequest] = Json.format
+}
+
+
+case class CreateSampleRequest (
+            /* query string to get schema for - table name */
+                  source: String,
+            /* mode configuration */
+                  samplingMode: mimir.algebra.sampling.SamplingMode,
+            /* seed - optional long */
+                  seed: Option[Long]
+) extends Request {
+  def handle(os:OutputStream) = {
+    val viewName = s"SAMPLE_${(source+samplingMode.toString+seed.toString).hashCode().toString().replace("-", "")}"
+    MimirVizier.db.update(
+      mimir.parser.CreateSample(
+        sparsity.Name(viewName),
+        samplingMode,
+        sparsity.Name(source),
+        orReplace = true,
+        asView = true, 
+        seed = seed
+      )
+    )
+    os.write(Json.stringify(Json.toJson(CreateSampleResponse(viewName))).getBytes)
+  }
+}
+
+object CreateSampleRequest {
+implicit val format: Format[CreateSampleRequest] = Json.format
 }
 

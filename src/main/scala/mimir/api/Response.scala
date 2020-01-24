@@ -26,15 +26,15 @@ object ErrorResponse {
   implicit val format: Format[ErrorResponse] = Json.format
 }
 
-case class ScalaEvalResponse (
+case class CodeEvalResponse (
             /* stdout from evaluation of scala code */
                   stdout: String,
             /* stderr from evaluation of scala code */
                   stderr: String
 ) extends Response
 
-object ScalaEvalResponse {
-  implicit val format: Format[ScalaEvalResponse] = Json.format
+object CodeEvalResponse {
+  implicit val format: Format[CodeEvalResponse] = Json.format
 }
 
 
@@ -47,6 +47,15 @@ object LoadResponse {
   implicit val format: Format[LoadResponse] = Json.format
 }
 
+
+case class UnloadResponse (
+            /* name of resulting table */
+                  outputFiles: Seq[String]
+) extends Response
+
+object UnloadResponse {
+  implicit val format: Format[UnloadResponse] = Json.format
+}
 
 case class CreateLensResponse (
             /* name of resulting lens */
@@ -140,3 +149,12 @@ object SchemaList {
 
 
 
+
+case class CreateSampleResponse (
+            /* name of resulting view */
+                  viewName: String
+) extends Response
+
+object CreateSampleResponse {
+  implicit val format: Format[CreateSampleResponse] = Json.format
+}

@@ -13,6 +13,7 @@
 
   <!--++++++++++++++++++  Adaptive Schemas  +++++++++++++++++++-->
   <logger name="mimir.adaptive.TypeInference$"                     level="WARN"/>
+  <logger name="mimir.adaptive.ShapeWatcher$"                      level="WARN"/>
 
   <!--+++++++++++++++++++++++  Algebra  +++++++++++++++++++++++-->
   <logger name="mimir.algebra.ExpressionChecker"                   level="WARN"/>
@@ -55,6 +56,7 @@
   <logger name="mimir.models.TypeInferenceModel"                   level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.WekaModel$"                           level="INFO"/> <!-- Use INFO to track stats -->
   <logger name="mimir.models.SeriesMissingValueModel"              level="WARN"/>
+  <logger name="mimir.models.DetectHeader$"                        level="INFO"/>
 
   <!--+++++++++++++++++++++  Optimizer  +++++++++++++++++++++++-->
   <logger name="mimir.optimizer.Optimizer$"                        level="WARN"/>
@@ -85,6 +87,8 @@
   <!--+++++++++++++++++++++  Statistics  ++++++++++++++++++++++-->
   <logger name="mimir.statistics.FuncDep"                          level="WARN"/>
   <logger name="mimir.statistics.SystemCatalog"                    level="WARN"/>
+  <logger name="mimir.statistics.facet.Nullable$"                  level="WARN"/>
+  <logger name="mimir.statistics.facet.ExpectedValues$"            level="WARN"/>
 
   <!--+++++++++++++++++++++++  Util  ++++++++++++++++++++++++++-->
   <logger name="mimir.util.LoadCSV$"                               level="INFO"/> <!-- Use INFO to track stats -->

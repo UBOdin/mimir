@@ -120,22 +120,25 @@ object SimpleDemoScript
 		}
 
 		"Create and Query Domain Constraint Repair Lenses" >> {
-			LoggerUtils.trace(
+			//LoggerUtils.trace(
 			  // "mimir.lenses.BestGuessCache"
 				// "mimir.exec.Compiler"
-			){
+			//){
 				update("""
 					CREATE LENS RATINGS1FINAL 
 					  AS SELECT * FROM RATINGS1 
 					  WITH MISSING_VALUE('RATING')
 				""")
-			}
+			//}
 			val nullRow = querySingleton("SELECT ROWID() FROM RATINGS1 WHERE RATING IS NULL").asLong
-
-			query("""
-				SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5
-			"""){ _.toSeq must have size(3) }
-
+      LoggerUtils.trace(
+			  "mimir.exec.spark.MimirSpark",
+				"mimir.exec.spark.MimirSparkRuntimeUtils"
+			){
+  			query("""
+  				SELECT RATING FROM RATINGS1FINAL WHERE RATING < 5
+  			"""){ _.toSeq must have size(3) }
+			}
 			queryOneColumn("SELECT PID FROM RATINGS1") { _.toSeq must not contain(NullPrimitive()) }
 			queryOneColumn("SELECT PID FROM RATINGS1FINAL") { _.toSeq must not contain(NullPrimitive()) }
 		}

@@ -13,6 +13,8 @@ class NameLookup[T](private val elems: Seq[(Name, T)])
   def keys = elems.map { _._1 }
   def hasKey(target: Name): Boolean = apply(target) != None
   def all: Seq[(Name, T)] = elems
+  override def toString: String =
+    { "{ "+elems.map { case (n, t) => s"$n -> $t" }.mkString(", ")+" }" }
 }
 
 object NameLookup 

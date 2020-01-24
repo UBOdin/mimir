@@ -40,6 +40,9 @@ import mimir.algebra._
 import mimir.algebra.function.{SparkFunctions, AggregateRegistry}
 import mimir.{Database, MimirConfig}
 import mimir.util.{ExperimentalOptions, SparkUtils, HadoopUtils}
+import org.datasyslab.geospark.serde.GeoSparkKryoRegistrator
+import org.datasyslab.geosparksql.utils.GeoSparkSQLRegistrator
+import org.apache.spark.sql.geosparksql.expressions.ST_Point
 
 object MimirSpark
   extends LazyLogging
@@ -68,7 +71,7 @@ object MimirSpark
     sheetCred = config.googleSheetsCredentialPath()
     val sparkHost = config.sparkHost()
     val sparkPort = config.sparkPort()
-
+      
     val conf = if(remoteSpark){
       new SparkConf().setMaster(s"spark://$sparkHost:$sparkPort")
         .set("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
@@ -90,15 +93,19 @@ object MimirSpark
         .set("dfs.datanode.use.datanode.hostname", config.useHDFSHostnames().toString())
         .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=${config.dataDirectory()}")
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
+        .set("spark.kryo.registrator",classOf[GeoSparkKryoRegistrator].getName)
     }
     else{
+      val dataDir = config.dataDirectory()
       new SparkConf().setMaster("local[*]")
         .setAppName("Mimir")
         .set("spark.sql.catalogImplementation", "hive")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        // .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
-        // .set("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .set("spark.driver.extraJavaOptions", s"-Dderby.system.home=$dataDir")
+        .set("spark.sql.warehouse.dir", s"${new File(dataDir).getAbsolutePath}/spark-warehouse")
+        .set("spark.hadoop.javax.jdo.option.ConnectionURL", s"jdbc:derby:;databaseName=${new File(dataDir).getAbsolutePath}/metastore_db;create=true")
         .registerKryoClasses(SparkUtils.getSparkKryoClasses())
+        .set("spark.kryo.registrator",classOf[GeoSparkKryoRegistrator].getName)
     }
 
     val sparkCtx = SparkContext.getOrCreate(conf)//new SparkContext(conf)
@@ -115,7 +122,7 @@ object MimirSpark
       val overwriteJars = config.overwriteJars()
       sparkCtx.hadoopConfiguration.set("spark.sql.warehouse.dir",s"${hdfsHome}/metastore_db")
       sparkCtx.hadoopConfiguration.set("hive.metastore.warehouse.dir",s"${hdfsHome}/metastore_db")
-      HadoopUtils.writeToHDFS(sparkCtx, "mimir-core_2.11-0.2.jar", new File(s"${System.getProperty("user.home")}/.m2/repository/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, "mimir-core_2.11-0.3-SNAPSHOT.jar", new File(s"${System.getProperty("user.home")}/.m2/repository/info/mimirdb/mimir-core_2.11/0.3-SNAPSHOT/mimir-core_2.11-0.3-SNAPSHOT.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-slf4j_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-api_2.11/jars/scala-logging-api_2.11-2.1.2.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "scala-logging-api_2.11-2.1.2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging-slf4j_2.11/jars/scala-logging-slf4j_2.11-2.1.2.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "play-json_2.11-2.5.0-M2.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.play/play-json_2.11/jars/play-json_2.11-2.5.0-M2.jar"), overwriteJars)
@@ -125,15 +132,15 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, "sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "spark-xml_2.11-0.5.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.databricks/spark-xml_2.11/jars/spark-xml_2.11-0.5.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "spark-excel_2.11-0.11.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.crealytics/spark-excel_2.11/jars/spark-excel_2.11-0.11.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, "spark-google-spreadsheets_2.11-0.6.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.github.potix2/spark-google-spreadsheets_2.11/jars/spark-google-spreadsheets_2.11-0.6.1.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, "sparsity_2.11-1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/info.mimirdb/sparsity_2.11/jars/sparsity_2.11-1.0.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, "sparsity_2.11-1.5.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/info.mimirdb/sparsity_2.11/jars/sparsity_2.11-1.5.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "fastparse_2.11-2.1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.lihaoyi/fastparse_2.11/jars/fastparse_2.11-2.1.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
+       HadoopUtils.writeToHDFS(sparkCtx, "geospark-sql_2.3-1.2.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.datasyslab/geospark-sql_2.3/jars/geospark-sql_2.3-1.2.0.jar"), overwriteJars)
       
       //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
-      sparkCtx.addJar(s"$hdfsHome/mimir-core_2.11-0.2.jar")
+      sparkCtx.addJar(s"$hdfsHome/mimir-core_2.11-0.3-SNAPSHOT.jar")
       sparkCtx.addJar(s"$hdfsHome/scala-logging-slf4j_2.11-2.1.2.jar")                                                         
       sparkCtx.addJar(s"$hdfsHome/scala-logging-api_2.11-2.1.2.jar")       
       sparkCtx.addJar(s"$hdfsHome/play-json_2.11-2.5.0-M2.jar")  
@@ -143,10 +150,10 @@ object MimirSpark
       sparkCtx.addJar(s"$hdfsHome/sqlite-jdbc-3.16.1.jar")
       sparkCtx.addJar(s"$hdfsHome/spark-xml_2.11-0.5.0.jar")
       sparkCtx.addJar(s"$hdfsHome/spark-excel_2.11-0.11.0.jar")
-      sparkCtx.addJar(s"$hdfsHome/spark-google-spreadsheets_2.11-0.6.1.jar")
-      sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-1.0.jar")
+      sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-1.5.jar")
       sparkCtx.addJar(s"$hdfsHome/fastparse_2.11-2.1.0.jar")
       sparkCtx.addFile(s"$hdfsHome/$credentialName")
+      sparkCtx.addJar(s"$hdfsHome/geospark-sql_2.3-1.2.0.jar")
       
       FileUtils.getListOfFiles(config.sparkJars()).map(file => {
         if(file.getName.endsWith(".jar")){
@@ -184,6 +191,7 @@ object MimirSpark
     }
 
     sparkSql = new SQLContext(sparkCtx)
+    GeoSparkSQLRegistrator.registerAll(sparkSql.sparkSession)
   }
 
   def close() = {
@@ -232,41 +240,76 @@ object MimirSpark
            .catalog
            .listFunctions("mimir")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).foreach{ case (fidentifier, fname) => {
-          val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
-          if(!fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
-            logger.debug("registering spark function: " + fidentifier.funcName)
-            SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
-              val sparkInputs = inputs.map(inp => Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParam(inp)))
-              val sparkInternal = inputs.map(inp => RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParam(inp))
-              val sparkRow = InternalRow(sparkInternal:_*)
-              val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              val sparkFunc = Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
-                                .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
-              val sparkRes = sparkFunc.eval(sparkRow)
-              sparkFunc.dataType match {
-                  case LongType => IntPrimitive(sparkRes.asInstanceOf[Long])
-                  case IntegerType => IntPrimitive(sparkRes.asInstanceOf[Int].toLong)
-                  case FloatType => FloatPrimitive(sparkRes.asInstanceOf[Float])
-                  case DoubleType => FloatPrimitive(sparkRes.asInstanceOf[Double])
-                  case ShortType => IntPrimitive(sparkRes.asInstanceOf[Short].toLong)
-                  case DateType => SparkUtils.convertDate(sparkRes.asInstanceOf[java.sql.Date])
-                  case BooleanType => BoolPrimitive(sparkRes.asInstanceOf[Boolean])
-                  case TimestampType => SparkUtils.convertTimestamp(sparkRes.asInstanceOf[java.sql.Timestamp])
-                  case x => {
-                    sparkRes match {
-                      case null => NullPrimitive()
-                      case _ => StringPrimitive(sparkRes.toString())
-                    }
+          val fInfo = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier)
+          val isGeosparkFunction = fidentifier.toString().startsWith("st_")
+          if(fInfo != null){
+            val fClassName = fInfo.getClassName
+            if(fClassName != null && !fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+              logger.debug("registering spark function: " + fidentifier.funcName)
+              SparkFunctions.addSparkFunction(ID(fidentifier.funcName), (inputs) => {
+                val sparkInputs = inputs.map(inp => 
+                  if(isGeosparkFunction){
+                    Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParamGeo(inp))
                   }
-                } 
-            }, 
-            (inputTypes) => {
-              val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
-              RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
-              .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
-            })
-          } 
+                  else{
+                    Literal(RAToSpark.mimirPrimitiveToSparkExternalInlineFuncParam(inp))
+                  })
+                val sparkInternal = inputs.map(inp => 
+                  if(isGeosparkFunction){
+                    RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParamGeo(inp)
+                  }
+                  else {
+                    RAToSpark.mimirPrimitiveToSparkInternalInlineFuncParam(inp)
+                  })
+                val sparkRow = InternalRow(sparkInternal:_*)
+                val sparkFunc = if(isGeosparkFunction){
+                  val constructors = Class.forName(fClassName.replaceAll("\\$", "")).getDeclaredConstructors
+                  val constructor = constructors.head
+                  constructor.setAccessible(true)
+                  constructor.newInstance(sparkInputs)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
+                }
+                else{
+                  val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(sparkInputs:_*)
+                                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression]
+                }
+                val sparkRes = sparkFunc.eval(sparkRow)
+                sparkFunc.dataType match {
+                    case LongType => IntPrimitive(sparkRes.asInstanceOf[Long])
+                    case IntegerType => IntPrimitive(sparkRes.asInstanceOf[Int].toLong)
+                    case FloatType => FloatPrimitive(sparkRes.asInstanceOf[Float])
+                    case DoubleType => FloatPrimitive(sparkRes.asInstanceOf[Double])
+                    case ShortType => IntPrimitive(sparkRes.asInstanceOf[Short].toLong)
+                    case DateType => SparkUtils.convertDate(sparkRes.asInstanceOf[java.sql.Date])
+                    case BooleanType => BoolPrimitive(sparkRes.asInstanceOf[Boolean])
+                    case TimestampType => SparkUtils.convertTimestamp(sparkRes.asInstanceOf[java.sql.Timestamp])
+                    case x => {
+                      sparkRes match {
+                        case null => NullPrimitive()
+                        case _ => StringPrimitive(sparkRes.toString())
+                      }
+                    }
+                  } 
+              }, 
+              (inputTypes) => {
+                if(isGeosparkFunction){
+                  val inputs = inputTypes.map(inp => Literal(RAToSpark.getNativeGeo(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  val constructors = Class.forName(fClassName.replaceAll("\\$", "")).getDeclaredConstructors
+                  val constructor = constructors.head
+                  constructor.setAccessible(true)
+                  RAToSpark.getMimirType( constructor.newInstance(inputs)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+                }
+                else{
+                  val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  val constructorTypes = inputs.map(inp => classOf[org.apache.spark.sql.catalyst.expressions.Expression])
+                  RAToSpark.getMimirType( Class.forName(fClassName).getDeclaredConstructor(constructorTypes:_*).newInstance(inputs:_*)
+                  .asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression].dataType)
+                }
+              })
+            } 
+          }
       } }
     SparkFunctions.register(fr)
   }
@@ -279,7 +322,7 @@ object MimirSpark
            .listFunctions("mimir")
     sparkFunctions.filterNot(fid => excludedFunctions.contains(ID(fid._1.funcName.toLowerCase()))).flatMap{ case (fidentifier, fname) => {
           val fClassName = get.sparkSession.sessionState.catalog.lookupFunctionInfo(fidentifier).getClassName
-          if(fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
+          if(fClassName != null && fClassName.startsWith("org.apache.spark.sql.catalyst.expressions.aggregate")){
             Some((fidentifier.funcName, 
             (inputTypes:Seq[Type]) => {
               val inputs = inputTypes.map(inp => Literal(RAToSpark.getNative(NullPrimitive(), inp)).asInstanceOf[org.apache.spark.sql.catalyst.expressions.Expression])

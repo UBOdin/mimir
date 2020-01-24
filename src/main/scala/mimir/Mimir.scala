@@ -50,8 +50,11 @@ object Mimir extends LazyLogging {
     // Prepare experiments
     ExperimentalOptions.enable(conf.experimental())
 
+    val dataDir = new java.io.File(conf.dataDirectory())
+    if(!dataDir.exists())
+      dataDir.mkdirs()
    
-    val staging = new LocalFSRawFileProvider(new java.io.File(conf.dataDirectory()))
+    val staging = new LocalFSRawFileProvider(dataDir)
 
     // Set up the database connection(s)
     MimirSpark.init(conf)
@@ -490,7 +493,7 @@ class MimirConfig(arguments: Seq[String]) extends ScallopConf(arguments)
   val dataStagingType = opt[String]("dataStagingType", descr = "where to stage data for spark: hdfs or s3",
     default = Some("hdfs"))
   val dataDirectory = opt[String]("dataDirectory", descr = "The directory to place data files",
-    default = Some("."))
+    default = Some(s"${System.getProperty("user.home")}/mimir-data"))
   val googleSheetsCredentialPath = opt[String]("sheetCred", descr = "Credential file for google sheets",
     default = Some("test/data/api-project-378720062738-5923e0b6125f"))
   def dbname : ScallopOption[String] = { 
