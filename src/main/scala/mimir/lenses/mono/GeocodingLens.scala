@@ -6,15 +6,67 @@ import mimir.Database
 import mimir.algebra._
 import mimir.ctables.Reason
 import mimir.lenses._
+import mimir.util.{ HTTPUtils, JsonUtils }
+import com.typesafe.scalalogging.slf4j.LazyLogging
+
+case class GeocodingLensConfig(
+  houseNumColumn: Option[ID],
+  streetColumn: Option[ID],
+  cityColumn: Option[ID],
+  stateColumn: Option[ID],
+  geocoder: ID,
+  latitudeCol: Option[ID],
+  longitudeCol: Option[ID]
+)
+{
+  def validate(query: Operator): Seq[String] =
+  {
+    val cols = query.columnNames.toSet
+    Seq(
+      "house number" -> houseNumColumn,
+      "street" -> streetColumn,
+      "city" -> cityColumn,
+      "state" -> stateColumn
+    ).flatMap { 
+      case (_, None)         => None
+      case (desc, Some(col)) => 
+        if(cols(col)){ None } 
+        else {
+          Some(s"Invalid $desc '$col'")
+        }
+    } ++ (if(!GeocodingLens.GEOCODERS.contains(geocoder)){ 
+      Seq(s"Invalid geocoder '$geocoder'")
+    } else { Seq() })
+  }
+}
+
+object GeocodingLensConfig
+{
+  implicit val format: Format[GeocodingLensConfig] = Json.format
+}
+
 
 object GeocodingLens extends MonoLens
 {
+  val GEOCODERS = Set[ID](
+    ID("google"),
+    ID("osm")   
+  )
+
   def train(
     db: Database,
     name: ID,
     query: Operator,
     config: JsValue
-  ): JsValue = ???
+  ): JsValue = 
+  {
+    val geocodingConfig = config.as[GeocodingLensConfig]
+    val errors = geocodingConfig.validate(query)
+    if(!errors.isEmpty){
+      throw new RAException(s"Invalid configuration: ${errors.mkString(",")}")
+    }
+    return config
+  }
 
   def view(
     db: Database,
@@ -22,7 +74,50 @@ object GeocodingLens extends MonoLens
     query: Operator,
     config: JsValue,
     friendlyName: String
-  ): Operator = ???
+  ): Operator = 
+  {
+    val geocode = config.as[GeocodingLensConfig]
+
+    val houseNumColumn = geocode.houseNumColumn.map { Var(_) }.getOrElse { NullPrimitive() } 
+    val streetColumn = geocode.streetColumn.map { Var(_) }.getOrElse { NullPrimitive() }
+    val cityColumn = geocode.cityColumn.map { Var(_) }.getOrElse { NullPrimitive() }
+    val stateColumn = geocode.stateColumn.map { Var(_) }.getOrElse { NullPrimitive() }
+
+    val args = Seq(
+        houseNumColumn,
+        streetColumn,
+        cityColumn,
+        stateColumn
+      )
+
+    def udf(idx:Int) = 
+      Function(ID("geocode_"+geocode.geocoder), IntPrimitive(idx) +: args)
+    def withCaveat(idx:Int) = 
+      Caveat(name, udf(idx), args, 
+        Function(ID("concat"), Seq(
+          StringPrimitive("Geocoded '"),
+          houseNumColumn,
+          StringPrimitive(" "),
+          streetColumn,
+          StringPrimitive("; "),
+          cityColumn,
+          StringPrimitive(", "),
+          stateColumn,
+          StringPrimitive(s"' using ${geocode.geocoder}")
+        ))
+      )
+
+    val latitudeCol = geocode.latitudeCol.getOrElse(ID("LATITUDE"))
+    val longitudeCol = geocode.longitudeCol.getOrElse(ID("LONGITUDE"))
+
+    query.removeColumnsByID( // Remove the columns if they exist already
+          latitudeCol, 
+          longitudeCol
+        ).addColumnsByID(
+          latitudeCol -> withCaveat(0), 
+          longitudeCol -> withCaveat(1)
+        )
+  }
 
   def warnings(
     db: Database, 
@@ -33,6 +128,97 @@ object GeocodingLens extends MonoLens
     friendlyName: String
   ) = Seq[Reason]()
 }
+
+abstract class Geocoder {
+  val cache = 
+    scala.collection.mutable.Map[
+      (String,String,String,String), // House#, Street, City, State
+      Option[(Double, Double)]               // Latitude, Longitude
+    ]()
+
+  def apply(latOrLong: Long, house: String, street: String, city: String, state: String): Double =
+  {
+    val tuple = (house, street, city, state)
+    val latLong = 
+      cache.getOrElseUpdate( 
+        tuple, 
+        { locate(house, street, city, state) }
+      )
+    if(latOrLong == 0){ return latLong.map { _._1 }.getOrElse( 0.0 ) }
+    else {              return latLong.map { _._2 }.getOrElse( 0.0 ) }
+  }
+
+  def locate(house: String, street: String, city: String, state: String): Option[(Double,Double)]
+}
+
+abstract class WebJsonGeocoder(latPath: String, lonPath: String) 
+  extends Geocoder 
+  with LazyLogging
+{
+  def locate(house: String, street: String, city: String, state: String): Option[(Double,Double)] =
+  {
+    val actualUrl = url(house, street, city, state)
+    try {
+      val json = Json.parse(HTTPUtils.get(actualUrl))
+      val latitude = JsonUtils.seekPath( 
+                        json, 
+                        latPath
+                      ).toString().replaceAll("\"", "").toDouble
+      val longitude = JsonUtils.seekPath( 
+                        json, 
+                        lonPath
+                      ).toString().replaceAll("\"", "").toDouble
+      return Some( (latitude, longitude) )
+    } catch {
+      case ioe: Throwable =>  {
+        logger.error(s"Exception with Geocoding Request: $actualUrl", ioe)
+        None
+      }
+    }
+  }
+
+  def url(house: String, street: String, city: String, state: String): String
+}
+
+class GoogleGeocoder(apiKey: String) extends WebJsonGeocoder(
+  ".results[0].geometry.location.lat", 
+  ".results[0].geometry.location.lng"
+)
+{
+  def url(house: String, street: String, city: String, state: String) =
+    s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$house+${street.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=$apiKey"
+}
+
+object OSMGeocoder extends WebJsonGeocoder(
+  "[0].lat", 
+  "[0].lon"
+)
+{
+  def url(house: String, street: String, city: String, state: String) =
+    s"http://52.0.26.255/?format=json&street=$house%20$street&city=$city&state=$state"
+}
+
+  
+//   private def makeGeocodeRequest(args: Seq[PrimitiveValue]) : Option[String] = {
+//     val houseNumber = args(1) match { case NullPrimitive() => "" ; case x => x.asString }
+//     val streetName = args(2) match { case NullPrimitive() => "" ; case x => x.asString }
+//     val city = args(3) match { case NullPrimitive() => "" ; case x => x.asString }
+//     val state = args(4) match { case NullPrimitive() => "" ; case x => x.asString }
+//     val url = geocoder match {
+//       case ID("GOOGLE") => (
+//       case ID("OSM") | _ => (s"http://52.0.26.255/?format=json&street=$houseNumber%20$streetName&city=$city&state=$state")
+//     }
+//     try {
+//       val geoRes = HTTPUtils.get(url) 
+//       setCache(0, args, Seq(), StringPrimitive(geoRes))
+//       Some(geoRes)
+//     } catch {
+//         case ioe: Throwable =>  {
+//           logger.error(s"Exception with Geocoding Request: $url", ioe)
+//           None
+//         }
+//     }       
+//   }
 
 
 

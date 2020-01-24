@@ -20,43 +20,11 @@ import mimir.util.StringUtils
 import mimir.serialization.AlgebraJson._
 
 
-case class CastColumnsLensVote(
-  t: Type,
-  count: Long
-)
-
-object CastColumnsLensVote
-{
-  implicit val format: Format[CastColumnsLensVote] = Json.format
-  def apply(v: (Type, Long)): CastColumnsLensVote = CastColumnsLensVote(v._1, v._2)
-}
-
 case class CastColumnsLensColumnConfig(
   chosen: Type,
-  trials: Long,
-  votes: Seq[CastColumnsLensVote]
+  caveat: String,
+  acknowledged: Boolean = true
 )
-{
-  def voteStringFor(t: Type): String = {
-    t match {
-      case TString() if votes.isEmpty => 
-        "nothing else matched"
-
-      case TString() => {
-          val bestAlternative = 
-            votes.maxBy { _.count }
-          s"Only ${bestAlternative.count} / $trials for the best alternative ${bestAlternative.t}"
-        }
-
-      case _ => 
-        votes.find { _.t.equals(t) } match {
-          case None => "no vote data"
-          case Some(v) => s"${v.count} / $trials records conforming"
-        }
-    }
-  }
-  def voteString = voteStringFor(chosen)
-}
 
 object CastColumnsLensColumnConfig
 {
@@ -92,6 +60,25 @@ object CastColumnsLens
       })
   }
 
+  def voteStringFor(t: Type, trials: Long, votes: Seq[(Type, Long)]): String = {
+    t match {
+      case TString() if votes.isEmpty => 
+        "nothing else matched"
+
+      case TString() => {
+          val (bestAlternativeType, bestAlternativeCount) = 
+            votes.maxBy { _._2 }
+          s"Only ${bestAlternativeCount} / $trials for the best alternative ${bestAlternativeType}"
+        }
+
+      case _ => 
+        votes.find { _._1.equals(t) } match {
+          case None => "no vote data"
+          case Some(v) => s"${v._2} / $trials records conforming"
+        }
+    }
+  }
+
   def train(
     db: Database,
     name: ID,
@@ -102,7 +89,7 @@ object CastColumnsLens
     val defaultConfig:Map[String,CastColumnsLensColumnConfig] = 
       jsonConfig match {
         case JsNull => Map()
-        case JsObject(_) => jsonConfig.as[Map[String, CastColumnsLensColumnConfig]]
+        case JsObject(j) => j("columns").as[Map[String, CastColumnsLensColumnConfig]]
         case _ => throw new SQLException(s"Invalid initial configuration: $jsonConfig")
       }
 
@@ -164,8 +151,8 @@ object CastColumnsLens
 
           columnId.id -> CastColumnsLensColumnConfig(
             bestType, 
-            numberOfRowsTested,
-            votes.map { CastColumnsLensVote(_) }
+            voteStringFor(bestType, numberOfRowsTested, rawVotes),
+            false
           )
         }
         .toMap
@@ -190,7 +177,8 @@ object CastColumnsLens
                 Function(ID("concat"), Seq(
                   StringPrimitive("Couldn't cast '"),
                   CastExpression(Var(col), TString()),
-                  StringPrimitive(s"' as ${StringUtils.withDefiniteArticle(colConfig.chosen.toString)} in $friendlyName.$col (${colConfig.voteString})")
+                  StringPrimitive(s"' as ${StringUtils.withDefiniteArticle(colConfig.chosen.toString)} in $friendlyName.$col"+
+                                  (if(colConfig.acknowledged){ "" } else { " ("+colConfig.caveat+")"}) )
                 ))
               val assembledCaveat =
                 Caveat(name, NullPrimitive(), Seq(Var(col)), message)
