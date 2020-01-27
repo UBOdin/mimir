@@ -5,7 +5,8 @@ import sparsity.parser.{
   SQL,
   StreamParser,
   Elements => Sparsity,
-  Expression => ExprParser
+  Expression => ExprParser,
+  ErrorMessage
 }
 import sparsity.statement.{Statement, Select}
 import sparsity.expression.{Expression,StringPrimitive}
@@ -24,20 +25,19 @@ object MimirSQL
       input
     )
   def apply(input: String): Parsed[MimirStatement] = 
-    parse(input, statement(_))
+    parse(input, statement(_), verboseFailures = true)
 
   def Select(input: String): Select =
-    parse(input, SQL.select(_)) match {
+    parse(input+";", terminatedSelect(_), verboseFailures = true) match {
       case Parsed.Success(select, _) => sparsity.statement.Select(select)
-      case Parsed.Failure(msg, idx, extra) => {
-        val message = extra.trace().longMsg.replace(", found ", ",\nFound: ")
-        throw new SQLException(s"$message\nIn: $input")
-      }
+      case f@Parsed.Failure(msg, idx, extra) => 
+        throw new SQLException(ErrorMessage.format(input, f))
     }
   def Get(input: String): MimirStatement =
     apply(input) match {
       case Parsed.Success(stmt, _) => stmt
-      case Parsed.Failure(msg, idx, extra) => throw new SQLException(s"Invalid query (failure @ $idx: ${extra.trace().longMsg}) $input")
+      case f@Parsed.Failure(msg, idx, extra) => 
+        throw new SQLException(ErrorMessage.format(input, f))
     }
   def Get(input: Reader): Iterator[MimirStatement] =
     apply(input).map {
@@ -50,6 +50,10 @@ object MimirSQL
 
   def terminatedStatement[_:P]: P[MimirStatement] = P(
     statement ~ ";"
+  )
+
+  def terminatedSelect[_:P]: P[sparsity.select.SelectBody] = P(
+    SQL.parenthesizedSelect ~ ";"
   )
 
   def statement[_:P]: P[MimirStatement] = P(
