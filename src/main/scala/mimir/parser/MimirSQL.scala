@@ -27,10 +27,12 @@ object MimirSQL
     parse(input, statement(_))
 
   def Select(input: String): Select =
-    apply(input) match {
-      case Parsed.Success(SQLStatement(select: Select), _) => select
-      case Parsed.Success(_, _) => throw new SQLException(s"Invalid query (not a select) $input")
-      case Parsed.Failure(msg, idx, extra) => throw new SQLException(s"Invalid query (failure @ $idx: ${extra.trace().longMsg}) $input")
+    parse(input, SQL.select(_)) match {
+      case Parsed.Success(select, _) => sparsity.statement.Select(select)
+      case Parsed.Failure(msg, idx, extra) => {
+        val message = extra.trace().longMsg.replace(", found ", ",\nFound: ")
+        throw new SQLException(s"$message\nIn: $input")
+      }
     }
   def Get(input: String): MimirStatement =
     apply(input) match {

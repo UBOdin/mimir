@@ -555,17 +555,13 @@ object MimirVizier extends LazyLogging {
       
       val viewName = "VIEW_" + ((viewNameSuffix + query).hashCode().toString().replace("-", "") )
       // db.getView(viewName) match {
-      if(db.catalog.tableExists(Name(viewName))){
-        logger.warn("createView: From Vistrails: View already exists: " + viewName)
-      } else {
-        val viewQuery = SQL(inputSubstitutionQuery) match {
-          case fastparse.Parsed.Success(sparsity.statement.Select(body, _), _) => body
-          case x => throw new Exception(s"Invalid view query : $inputSubstitutionQuery \n $x")
-        }
-        logger.debug("createView: query: " + viewQuery)
-        db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
+      for(oldView <- db.views.resolveTableByName(Name(viewName))){
+        logger.warn("createView: From Vistrails: View already exists: " + oldView)
+        db.views.drop(oldView)
       }
-      viewName
+      val viewQuery = MimirSQL.Select(inputSubstitutionQuery).body
+      logger.debug("createView: query: " + viewQuery)
+      db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
     }
     logger.debug(s"createView ${timeRes._1.toString} Took: ${timeRes._2}")
     timeRes._1.toString

@@ -582,7 +582,7 @@ class SqlToRA(db: Database)
       case Some(columnBinding) => columnBinding
       case None => {
         val tableColumns = bindings.keys.map { col => Column(col, c.table) }
-        throw new SQLException(s"No such column ${c.column} (out of ${tableColumns.mkString(", ")})")
+        throw new SQLException(s"No such column `$c` out of ${tableColumns.mkString(", ")}")
       }
     }
   }
@@ -601,7 +601,7 @@ class SqlToRA(db: Database)
           }
         }
         val allColumns = NameLookup.merge(bindings.values).keys.map { col => Column(col, c.table) }
-        throw new SQLException(s"No such column ${c.column} (out of ${allColumns.mkString(", ")})")
+        throw new SQLException(s"No such column `${c.column}` out of ${allColumns.mkString(", ")}")
       }
     }
   }
@@ -617,7 +617,7 @@ class SqlToRA(db: Database)
           case Some(tableBindings) => 
             lookupColumnInTableBindings(c, tableBindings)
           case None => 
-            throw new SQLException(s"No such table $table (out of ${bindings.keys.mkString(", ")})")
+            throw new SQLException(s"No such table `$table` out of ${bindings.keys.mkString(", ")}")
         }
       }
       case None => {
