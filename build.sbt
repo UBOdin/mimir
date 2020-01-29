@@ -141,8 +141,9 @@ libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
   "org.rogach"                    %%  "scallop"                  % "3.1.3",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %%  "sparsity"                 % "1.6",
+  "info.mimirdb"                  %%  "sparsity"                 % "1.6.1",
   "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
+  "org.apache.commons"            %   "commons-text"             % "1.8",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   //"com.typesafe.scala-logging"  %%  "scala-logging-slf4j"      % "2.1.2",
