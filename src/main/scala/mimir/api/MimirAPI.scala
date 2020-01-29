@@ -18,6 +18,8 @@ import org.eclipse.jetty.server.Handler
 import org.eclipse.jetty.webapp.WebAppContext
 import java.sql.SQLException
 
+import org.apache.commons.text.WordUtils
+
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
@@ -111,6 +113,9 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
                   else
                     cvJson.as[CreateViewRequest].handle(os)
                 }
+                case "/view/sample" => {
+                  Json.parse(text).as[CreateSampleRequest].handle(os)
+                }
                 case "/adaptive/create" => {
                   Json.parse(text).as[CreateAdaptiveSchemaRequest].handle(os)
                 }
@@ -144,31 +149,42 @@ class MimirVizierServlet() extends HttpServlet with LazyLogging {
               }
             } catch {
               case e: EOFException => 
-                os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
-                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
+                val message = 
+                os.write(Json.stringify(Json.toJson(ErrorResponse(
+                      e.getClass.getCanonicalName(),
+                      "Expected a longer file: "+e.getMessage(), 
+                      e.getStackTrace.map(_.toString).mkString("\n")
+                    ))).getBytes)
       
               case e: FileNotFoundException =>
-                os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
-                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
+                os.write(Json.stringify(Json.toJson(ErrorResponse(
+                      e.getClass.getCanonicalName(),
+                      "File or URL not found: "+e.getMessage(), 
+                      e.getStackTrace.map(_.toString).mkString("\n")
+                    ))).getBytes)
       
               case e: SQLException =>
-                os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
-                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
+                os.write(Json.stringify(Json.toJson(ErrorResponse(
+                      e.getClass.getCanonicalName(),
+                      WordUtils.wrap(e.getMessage(), 100), 
+                      e.getStackTrace.map(_.toString).mkString("\n")
+                    ))).getBytes)
                 logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
       
               case e: RAException =>
-                os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),e.getMessage(), 
-                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
+                os.write(Json.stringify(Json.toJson(ErrorResponse(
+                      e.getClass.getCanonicalName(),
+                      WordUtils.wrap(e.getMessage(), 100), 
+                      e.getStackTrace.map(_.toString).mkString("\n")
+                    ))).getBytes)
                 logger.debug(e.getMessage + "\n" + e.getStackTrace.map(_.toString).mkString("\n"))
       
               case e: Throwable => {
-                os.write(Json.stringify(Json.toJson(
-                    ErrorResponse(e.getClass.getCanonicalName(),"An unknown error occurred...", 
-                        e.getStackTrace.map(_.toString).mkString("\n")))).getBytes)
+                os.write(Json.stringify(Json.toJson(ErrorResponse(
+                      e.getClass.getCanonicalName(),
+                      WordUtils.wrap(e.getMessage(), 100),//"An unknown error occurred...", 
+                      e.getStackTrace.map(_.toString).mkString("\n")
+                    ))).getBytes)
                 logger.error("MimirAPI POST ERROR: ", e)
               }
             }  

@@ -63,6 +63,30 @@ object SerializationSpec extends SQLTestSpecification("SerializationTest") with 
         }
       }
     }
+
+    "Co/Dec Special Cases" >> {
+      Fragments.foreach(Seq[(String, (()=> Operator))](
+        "Uniform Samples" -> { () => 
+          db.table("T").sampleUniformly(0.1) 
+        },
+        "Stratified Samples" -> { () => 
+          db.table("T").stratifiedSample(
+            "C", TInt(), 
+            Map(IntPrimitive(1) -> 0.1), 
+            caveat = Some( (ID("stuff"), "a warning") )
+          )
+        }
+      )) { case (title: String, gen:(() => Operator)) =>
+        title in {
+          val raw = gen()
+          val serialized = Json.ofOperator(raw)
+          val deserialized = Json.toOperator(serialized)
+
+          Seq(deserialized must be equalTo raw)
+        }
+      }
+
+    }
   }
 
 }

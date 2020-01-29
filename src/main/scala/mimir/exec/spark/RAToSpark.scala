@@ -323,9 +323,12 @@ class RAToSpark(db: mimir.Database)
           true,
           mimirOpToSparkOp(src))
 			}
-			case _ => {
-			  throw new Exception("Operator Translation not implemented '"+oper+"'")
-			}
+      case DrawSamples(mode, src, seed, caveat) => {
+        mode.apply(
+          mimirOpToSparkOp(src),
+          seed
+        )
+      }
     }
   }
   

@@ -21,7 +21,8 @@ object SparkUtilsSpec
       val models = ClassFinder.concreteSubclasses("mimir.models.Model", classMap).map(clazz => Class.forName(clazz.name)).toSeq
       val operators = ClassFinder.concreteSubclasses("mimir.algebra.Operator", classMap).map(clazz => Class.forName(clazz.name)).toSeq
       val expressions = ClassFinder.concreteSubclasses("mimir.algebra.Expression", classMap).map(clazz => Class.forName(clazz.name)).toSeq
-      val kryoClasses = (models ++ operators ++ expressions)
+      val samplers = ClassFinder.concreteSubclasses("mimir.algebra.sampling.SamplingMode", classMap).map(clazz => Class.forName(clazz.name)).toSeq
+      val kryoClasses = (models ++ operators ++ expressions ++ samplers)
       SparkUtils.getSparkKryoClasses().toSeq must containTheSameElementsAs(kryoClasses)
     }
 

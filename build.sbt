@@ -137,6 +137,7 @@ libraryDependencies ++= Seq(
   "org.jline"                     %   "jline"                    % "3.2.0",
   "info.mimirdb"                  %%  "sparsity"                 % "1.6.1",
   "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
+  "org.apache.commons"            %   "commons-text"             % "1.8",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
   "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",

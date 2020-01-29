@@ -8,7 +8,7 @@ import scala.collection.JavaConverters._
 
 object Util {
   def convert(schema: StructType, row: Row): Map[String, Object] =
-    schema.iterator.zipWithIndex.map { case (f, i) => f.name -> row(i).asInstanceOf[AnyRef]} toMap
+    schema.iterator.zipWithIndex.map { case (f, i) => f.name -> row(i).asInstanceOf[AnyRef]}.toMap
 
   def toRowData(row: Row): RowData =
       new RowData().setValues(
