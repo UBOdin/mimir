@@ -562,6 +562,8 @@ object MimirVizier extends LazyLogging {
       val viewQuery = MimirSQL.Select(inputSubstitutionQuery).body
       logger.debug("createView: query: " + viewQuery)
       db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
+
+      viewName
     }
     logger.debug(s"createView ${timeRes._1.toString} Took: ${timeRes._2}")
     timeRes._1.toString
