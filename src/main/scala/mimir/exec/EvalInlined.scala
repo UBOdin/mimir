@@ -136,6 +136,15 @@ class EvalInlined[T](scope: Map[ID, (Type, (T => PrimitiveValue))], db: Database
       case _ => throw new RAException(s"Invalid Expression on Int: $e")
     }
   }
+
+  def isCastableToFloat(t:Type): Boolean =
+  {
+    Type.rootType(t) match {
+      case TFloat() => true
+      case TInt() => true
+      case _ => false
+    }
+  }
   def compileForDouble(e: Expression): Compiled[Double] = 
   {
     e match {
@@ -158,7 +167,7 @@ class EvalInlined[T](scope: Map[ID, (Type, (T => PrimitiveValue))], db: Database
         val l = compileFunction(name, args); { l(_).asDouble }
       }
       case Conditional(c, t, e) => compileConditional(c, t, e, compileForDouble)
-      case CastExpression(expr, floatable) if Type.rootType(floatable).isInstanceOf[TFloat] 
+      case CastExpression(expr, floatable) if isCastableToFloat(floatable)
         => val l = compile(expr); { t:T => Cast(TFloat(), l(t)).asDouble }
       case _ => throw new RAException(s"Invalid Expression on Float: $e")
     }
