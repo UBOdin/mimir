@@ -1,0 +1,4 @@
+ShapeWatcherLens needs per-record highlighting with the new facet types
+MergeTablesLens needs to be implemented
+Unit tests for everything
+Sampling functionality as a lens
