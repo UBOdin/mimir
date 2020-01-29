@@ -59,6 +59,12 @@ class LensManager(db: Database)
       ))
     ))
 
+  def init()
+  {
+    logger.trace("Initializing lenses that need it")
+    for((_, lens) <- lensTypes){ lens.init(db) }
+  }
+
   def create(
     t: ID, 
     lensName: ID, 
@@ -128,15 +134,12 @@ class LensManager(db: Database)
         case None => throw new SQLException(s"Invalid lens $lens")
       }
 
-    lensForDetails(details) match {
-      case cleanup:LensNeedsCleanup => 
-        cleanup.drop(
-          db, 
-          lens, 
-          configForDetails(details)
-        )
-      case _ => ()
-    }
+    lensForDetails(details).drop(
+      db, 
+      lens, 
+      configForDetails(details)
+    )
+
     lenses.rm(lens)
   }
 

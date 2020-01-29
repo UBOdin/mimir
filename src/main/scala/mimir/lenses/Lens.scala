@@ -25,23 +25,30 @@ sealed trait Lens
     query: Operator,
     config: JsValue 
   ): JsValue
-}
 
-trait LensNeedsCleanup 
-{
+  /**
+   * Implement any code required to set up the lens (e.g., registering UDFs)
+   * 
+   * @param db           The global database instance
+   */
+  def init(db: Database) { /* no-op by default */ } 
+  
   /**
    * Cleanup the specified lens before it is dropped
    * 
    * @param db           The global database instance
    * @param name         The identity of the specified lens
    * @param config       The user-provided configuration for this lens
-   * @return             True if the specified 
    */
   def drop(
     db: Database, 
     name: ID,
     config: JsValue 
-  ): Unit  
+  ) { /* no-op by default */ }
+}
+
+trait LensNeedsCleanup 
+{
 }
 
 trait MonoLens extends Lens

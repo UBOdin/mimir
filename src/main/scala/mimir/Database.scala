@@ -144,6 +144,7 @@ case class Database(
                                 )
 
   {
+    lenses.init()
     MimirSpark.linkDBToSpark(this)
   }
 

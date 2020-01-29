@@ -8,6 +8,7 @@ import mimir.ctables.Reason
 import mimir.lenses._
 import mimir.util.{ HTTPUtils, JsonUtils }
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import mimir.exec.spark.MimirSpark
 
 case class GeocodingLensConfig(
   houseNumColumn: Option[ID],
@@ -91,7 +92,11 @@ object GeocodingLens extends MonoLens
       )
 
     def udf(idx:Int) = 
-      Function(ID("geocode_"+geocode.geocoder), IntPrimitive(idx) +: args)
+      Function(
+        ID("mimir_geocode_"+geocode.geocoder), 
+        IntPrimitive(idx) +: 
+          args.map { CastExpression(_, TString()) 
+      })
     def withCaveat(idx:Int) = 
       Caveat(name, udf(idx), args, 
         Function(ID("concat"), Seq(
@@ -127,32 +132,61 @@ object GeocodingLens extends MonoLens
     configJson: JsValue, 
     friendlyName: String
   ) = Seq[Reason]()
+  override def init(db: Database)
+  {
+    new GoogleGeocoder("AIzaSyAKc9sTF-pVezJY8-Dkuvw07v1tdYIKGHk").register(
+      db,
+      ID("mimir_geocode_google")
+    )
+    new OSMGeocoder("http://52.0.26.255").register(
+      db,
+      ID("mimir_geocode_osm")
+    )
+  }
 }
 
-abstract class Geocoder {
+abstract class Geocoder extends Serializable {
   val cache = 
     scala.collection.mutable.Map[
       (String,String,String,String), // House#, Street, City, State
       Option[(Double, Double)]               // Latitude, Longitude
     ]()
 
-  def apply(latOrLong: Long, house: String, street: String, city: String, state: String): Double =
+  def apply(args: Seq[PrimitiveValue]): PrimitiveValue =
+    apply(args(0), args(1), args(2), args(3), args(4))
+  def apply(latOrLong: PrimitiveValue, house: PrimitiveValue, street: PrimitiveValue, city: PrimitiveValue, state: PrimitiveValue): PrimitiveValue =
   {
-    val tuple = (house, street, city, state)
-    val latLong = 
+    val tuple = (house.asString, street.asString, city.asString, state.asString)
+    val result = 
       cache.getOrElseUpdate( 
         tuple, 
-        { locate(house, street, city, state) }
+        { locate(tuple._1, tuple._2, tuple._3, tuple._4) }
       )
-    if(latOrLong == 0){ return latLong.map { _._1 }.getOrElse( 0.0 ) }
-    else {              return latLong.map { _._2 }.getOrElse( 0.0 ) }
+    val selected: Double =
+      if(latOrLong.asLong == 0){ result.map { _._1 }.getOrElse( 0.0 ) }
+      else {                     result.map { _._2 }.getOrElse( 0.0 ) }
+    
+    return FloatPrimitive(selected)
+  }
+
+  def register(db: Database, name: ID)
+  {
+    db.functions.register(
+      name, 
+      apply(_:Seq[PrimitiveValue]),
+      (t:Seq[Type]) => t match {
+        case Seq(TInt(), _, _, _, _) => TFloat()
+        case _ => throw new RAException("Geocoders expect 5 arguments")
+      }
+    )
   }
 
   def locate(house: String, street: String, city: String, state: String): Option[(Double,Double)]
+
 }
 
 abstract class WebJsonGeocoder(latPath: String, lonPath: String) 
-  extends Geocoder 
+  extends Geocoder
   with LazyLogging
 {
   def locate(house: String, street: String, city: String, state: String): Option[(Double,Double)] =
@@ -189,13 +223,13 @@ class GoogleGeocoder(apiKey: String) extends WebJsonGeocoder(
     s"https://maps.googleapis.com/maps/api/geocode/json?address=${s"$house+${street.replaceAll(" ", "+")},+${city.replaceAll(" ", "+")},+$state".replaceAll("\\+\\+", "+")}&key=$apiKey"
 }
 
-object OSMGeocoder extends WebJsonGeocoder(
+class OSMGeocoder(hostURL: String) extends WebJsonGeocoder(
   "[0].lat", 
   "[0].lon"
 )
 {
   def url(house: String, street: String, city: String, state: String) =
-    s"http://52.0.26.255/?format=json&street=$house%20$street&city=$city&state=$state"
+    s"$hostURL/?format=json&street=$house%20$street&city=$city&state=$state"
 }
 
   

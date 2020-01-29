@@ -96,7 +96,10 @@ object ID
   def lower(id: Name)   = ID(id.lower)
   def upper(id: String) = ID(id.toUpperCase)
   def lower(id: String) = ID(id.toLowerCase)
-  implicit val format: Format[ID] = Json.format
+  implicit val format: Format[ID] = Format(
+    JsPath.read[String].map { ID(_) },
+    new Writes[ID]{ def writes(i:ID) = JsString(i.id) }
+  )
 }
 
 object IDConversions

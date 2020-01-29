@@ -34,6 +34,8 @@
   
   <logger name="org.apache.hadoop.util.Shell" level="OFF"/>
 
+  <logger name="mimir.exec.spark.MimirSpark$" level="WARN"/>
+
   <root level="ERROR">
     <appender-ref ref="STDOUT" />
   </root>
