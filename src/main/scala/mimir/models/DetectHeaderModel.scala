@@ -92,7 +92,7 @@ with SourcedFeedback
       }) match {
         case Seq() => {
           if(!conflictOrNullCols.isEmpty){ 
-            DetectHeader.logger.warn(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
+            DetectHeader.logger.debug(s"There are some type conflicts or nulls in cols: ${conflictOrNullCols.map(columns(_))}") 
           }
           (true, top6.head.zipWithIndex.map(colIdx => (colIdx._2, colIdx._1 match {
             case NullPrimitive() =>  ID(s"COLUMN_${colIdx._2}")
