@@ -70,7 +70,8 @@ object CreateLensResponse {
 
 case class CreateViewResponse (
             /* name of resulting view */
-                  viewName: String
+                  viewName: String,
+                  dependencies: Seq[String]
 ) extends Response
 
 object CreateViewResponse {

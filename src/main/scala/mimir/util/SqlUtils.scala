@@ -159,4 +159,17 @@ object SqlUtils {
         mySchema ++ subSchemas
     }
   } 
+
+  def getReferencedTables(select: SelectBody): Set[(Option[Name], Name)] =
+    // for now, references only live in the from items
+    select.from.flatMap { getReferencedTables(_) }.toSet
+    
+  def getReferencedTables(from: FromElement): Set[(Option[Name], Name)] =
+  {
+    from match {
+      case FromSelect(query, _) => getReferencedTables(query)
+      case FromTable(source, table, _) => Set( source -> table)
+      case FromJoin(lhs, rhs, _, _, _) => getReferencedTables(lhs) ++ getReferencedTables(rhs)
+    }
+  }
 }
