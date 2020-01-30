@@ -111,7 +111,7 @@ class SqlParserSpec
 
 		"Handle IN queries" >> {
 			db.query(
-				convert("SELECT `_c1` FROM R WHERE R.`_c0` IN ('2','3','4');")
+				convert("SELECT `_c1` FROM R WHERE `R`.`_c0` IN ('2','3','4');")
 			) { _.toList.map(_.tuple) } must not contain(Seq(StringPrimitive("3"))) 
 		}
 

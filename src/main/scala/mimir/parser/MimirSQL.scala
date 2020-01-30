@@ -53,7 +53,7 @@ object MimirSQL
   )
 
   def terminatedSelect[_:P]: P[sparsity.select.SelectBody] = P(
-    SQL.parenthesizedSelect ~ ";"
+    Pass() ~ SQL.parenthesizedSelect ~ ";"
   )
 
   def statement[_:P]: P[MimirStatement] = P(
