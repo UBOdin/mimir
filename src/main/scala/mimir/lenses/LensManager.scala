@@ -9,7 +9,6 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.sql._
 import mimir.metadata._
-import mimir.models._
 import mimir.data.ViewSchemaProvider
 import mimir.util.JDBCUtils
 import mimir.util.ExperimentalOptions

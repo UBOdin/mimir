@@ -26,7 +26,6 @@ import mimir.exec.result.{ResultIterator,Row}
 import mimir.exec.spark.MimirSpark
 import mimir.lenses.{LensManager}
 import mimir.metadata.MetadataBackend
-import mimir.models.Model
 import mimir.parser.{
     MimirStatement,
     SQLStatement,

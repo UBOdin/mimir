@@ -3,7 +3,6 @@ package mimir.ctables;
 import optimus.optimization._
 import optimus.algebra._
 import mimir.ctables._
-import mimir.models._
 import mimir.algebra._
 
 class Oracle(time : Double, trcmap : collection.mutable.LinkedHashMap[(ID,Seq[PrimitiveValue]),(Double,Double,Double)]) {

@@ -1,4 +1,10 @@
-ShapeWatcherLens needs per-record highlighting with the new facet types
 MergeTablesLens needs to be implemented
-Unit tests for everything
 Sampling functionality as a lens
+Enable Feedback
+Unit tests for everything
+---- VIZIER ----
+Caveat.rowidarg -> Affected ROWID
+Move all getEnv calls to a DatabaseConfig
+Rework API to use MimirStatements instead
+Change ROWIDARG to use the new origin semantics in Reason
+---- or better still, discuss the right way to pull that off

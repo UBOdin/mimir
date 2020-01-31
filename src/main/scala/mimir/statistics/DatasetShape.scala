@@ -17,17 +17,4 @@ object DatasetShape
   def detect(db: Database, query: Operator): Seq[Facet] =
     detectors.map { _(db, query) }.flatten
 
-  def parse(json: JsValue): Facet =
-  {
-    for(d <- detectors) {
-      d.jsonToFacet(json) match {
-        case Some(f) => return f
-        case None => ()
-      }
-    }
-    throw new Exception(s"Invalid Json Facet Encoding: ${json}")
-  }
-
-  def parse(json: String): Facet =
-    parse(Json.parse(json))
 }

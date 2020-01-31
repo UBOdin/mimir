@@ -4,7 +4,6 @@ import java.sql.SQLException
 
 import mimir.Database
 import mimir.algebra._
-import mimir.models._
 import mimir.util._
 
 sealed trait Repair

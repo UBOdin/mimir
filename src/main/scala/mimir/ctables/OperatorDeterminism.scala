@@ -6,7 +6,6 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import mimir.algebra._
 import mimir.util._
 import mimir.optimizer._
-import mimir.models.Model
 import mimir.views.ViewAnnotation
 
 object OperatorDeterminism 

@@ -6,7 +6,6 @@ import play.api.libs.functional.syntax._
 
 import mimir.Database
 import mimir.algebra._
-import mimir.models._
 import mimir.exec.mode.UnannotatedBestGuess
 import mimir.serialization.AlgebraJson._
 

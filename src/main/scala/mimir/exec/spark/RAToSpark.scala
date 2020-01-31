@@ -151,7 +151,6 @@ import mimir.Database
 import mimir.algebra._
 import mimir.data._
 import mimir.exec.spark.udf._
-import mimir.models.Model
 import mimir.provenance.Provenance
 import mimir.util.SparkUtils
 

@@ -5,7 +5,6 @@ import play.api.libs.json._
 
 import mimir.Database
 import mimir.algebra._
-import mimir.models._
 import mimir.util.JSONBuilder
 import mimir.serialization.AlgebraJson._
 

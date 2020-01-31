@@ -4,7 +4,6 @@ import org.apache.spark.sql.catalyst.expressions.{ ScalaUDF, CreateStruct }
 
 import mimir.algebra._
 import mimir.algebra.function._
-import mimir.models._
 import mimir.exec.spark._
 
 case class FunctionUDF(oper:Operator, name:String, function:RegisteredFunction, params:Seq[org.apache.spark.sql.catalyst.expressions.Expression], argTypes:Seq[Type]) extends MimirUDF {

@@ -9,7 +9,6 @@ import mimir.data.{ SchemaProvider, SystemCatalog }
 import mimir.exec._
 import mimir.exec.mode._
 import mimir.lenses.LensManager
-import mimir.models._
 import mimir.optimizer.operator._
 import mimir.provenance._
 import mimir.util._

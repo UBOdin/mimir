@@ -3,6 +3,7 @@ package mimir.statistics.facet
 import play.api.libs.json._
 import mimir.Database
 import mimir.algebra._
+import mimir.statistics.DatasetShape
 
 trait Facet
 {
@@ -11,6 +12,28 @@ trait Facet
   def toJson: JsValue
 
   override def toString = description
+}
+
+object Facet
+{
+  def parse(json: JsValue): Facet =
+  {
+    for(d <- DatasetShape.detectors) {
+      d.jsonToFacet(json) match {
+        case Some(f) => return f
+        case None => ()
+      }
+    }
+    throw new Exception(s"Invalid Json Facet Encoding: ${json}")
+  }
+
+  def parse(json: String): Facet =
+    parse(Json.parse(json))
+
+  implicit val format: Format[Facet] = Format(
+    JsPath.read[JsObject].map { parse(_) },
+    new Writes[Facet] { def writes(f: Facet) = f.toJson }
+  )
 }
 
 trait AppliesToColumn

@@ -2,7 +2,6 @@ package mimir.ctables
 
 import mimir.algebra._
 import mimir.util.JSONBuilder
-import mimir.models._
 import scala.util._
 
 object CTables 
