@@ -65,6 +65,13 @@ object MimirSpark
   def localSpark = ExperimentalOptions.isEnabled("localSpark")
   var sheetCred: String = null
 
+  private lazy val jarPaths = 
+    System.getProperty("java.class.path")
+          .split(":")
+          .map { new java.io.File(_) }
+          .map { f => logger.trace(s"${f.getName()} -> $f"); f.getName() -> f }
+          .toMap
+
   def get: SQLContext = {
     if(sparkSql == null){ 
       throw new RuntimeException("Getting spark context before it is initialized")
@@ -151,46 +158,41 @@ object MimirSpark
       val overwriteJars = false//config.overwriteJars()
       //sparkCtx.hadoopConfiguration.set("spark.sql.warehouse.dir",s"${hdfsPath}metastore_db")
       //sparkCtx.hadoopConfiguration.set("hive.metastore.warehouse.dir",s"${hdfsPath}metastore_db")
-      HadoopUtils.writeToHDFS(sparkCtx, s"mimir-core_${scalaVersion}-0.3.jar", new File(getJarPath("info.mimirdb", "mimir-core", "0.3", scalaVersion)), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"scala-logging_${scalaVersion}-3.9.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.scala-logging/scala-logging_${scalaVersion}/bundles/scala-logging_${scalaVersion}-3.9.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"play-json_${scalaVersion}-2.7.0-M1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.play/play-json_${scalaVersion}/jars/play-json_${scalaVersion}-2.7.0-M1.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"play-functional_${scalaVersion}-2.7.0-M1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.typesafe.play/play-functional_${scalaVersion}/jars/play-functional_${scalaVersion}-2.7.0-M1.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"jsr-275-0.9.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/javax.measure/jsr-275/jars/jsr-275-0.9.1.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"postgresql-9.4-1201-jdbc41.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.postgresql/postgresql/jars/postgresql-9.4-1201-jdbc41.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"spark-xml_${scalaVersion}-0.5.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.databricks/spark-xml_${scalaVersion}/jars/spark-xml_${scalaVersion}-0.5.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"spark-excel_${scalaVersion}-0.12.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.crealytics/spark-excel_${scalaVersion}/jars/spark-excel_${scalaVersion}-0.12.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-services-sheets-v4-rev18-1.22.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.apis/google-api-services-sheets/jars/google-api-services-sheets-v4-rev18-1.22.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-client-1.22.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.api-client/google-api-client/jars/google-api-client-1.22.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-client-json-1.2.2-alpha.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.api.client/google-api-client-json/jars/google-api-client-json-1.2.2-alpha.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"google-api-client-util-1.2.2-alpha.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.google.api.client/google-api-client-util/jars/google-api-client-util-1.2.2-alpha.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"sparsity_${scalaVersion}-${sparsityVersion}.jar", new File(getJarPath("info.mimirdb", "sparsity", sparsityVersion, scalaVersion)), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"fastparse_${scalaVersion}-2.1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.lihaoyi/fastparse_${scalaVersion}/jars/fastparse_${scalaVersion}-2.1.0.jar"), overwriteJars)
+
+      val requiredJars = Seq(
+        ("info.mimirdb",               "mimir-core",                 "0.3",             true),
+        ("com.typesafe.scala-logging", "scala-logging",              "3.9.2",           true),
+        ("com.typesafe.play",          "play-json",                  "2.7.0-M1",        true),
+        ("com.typesafe.play",          "play-functional",            "2.7.0-M1",        true),
+        ("javax.measure",              "jsr-275",                    "0.9.1",           false),
+        ("org.postgresql",             "postgresql",                 "9.4-1201-jdbc41", false),
+        ("org.xerial",                 "sqlite-jdbc",                "3.16.1",          false),
+        ("com.databricks",             "spark-xml",                  "0.5.0",           true),
+        ("com.crealytics",             "spark-excel",                "0.12.0",          true),
+        ("com.google.apis",            "google-api-services-sheets", "v4-rev18-1.22.0", false),
+        ("com.google.api-client",      "google-api-client",          "1.22.0",          false),
+        ("com.google.api.client",      "google-api-client-json",     "1.2.2-alpha",     false),
+        ("com.google.api.client",      "google-api-client-util",     "1.2.2-alpha",     false),
+        ("com.lihaoyi",                "fastparse",                  "2.1.0"    ,       true),
+        ("info.mimirdb",               "sparsity",                   sparsityVersion,   true),
+        ("org.datasyslab",             "geospark-sql",               "2.3-1.2.0",       false),
+        ("org.rogach",                 "scallop",                    "3.1.3",           true)
+      ).map { case (domain, artifact, version, isScala) => 
+                val extendedArtifact = 
+                  if(isScala) { artifact + "_" + scalaVersion }
+                  else { artifact }
+                getJarPath(domain, extendedArtifact, version)
+            }
+
+      for(jar <- requiredJars){
+        HadoopUtils.writeToHDFS(sparkCtx, jar.getName(), jar, overwriteJars)
+      }
       HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
-      //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
-      //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, "geospark-sql_2.3-1.2.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.datasyslab/geospark-sql_2.3/jars/geospark-sql_2.3-1.2.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, s"scallop_${scalaVersion}-3.1.3.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.rogach/scallop_${scalaVersion}/jars/scallop_${scalaVersion}-3.1.3.jar"), overwriteJars)
-      
-      sparkCtx.addJar(s"${hdfsPath}mimir-core_${scalaVersion}-0.3.jar")
-      sparkCtx.addJar(s"${hdfsPath}scala-logging_${scalaVersion}-3.9.0.jar")       
-      sparkCtx.addJar(s"${hdfsPath}play-json_${scalaVersion}-2.7.0-M1.jar")  
-      sparkCtx.addJar(s"${hdfsPath}play-functional_${scalaVersion}-2.7.0-M1.jar")  
-      sparkCtx.addJar(s"${hdfsPath}jsr-275-0.9.1.jar")                                     
-      sparkCtx.addJar(s"${hdfsPath}postgresql-9.4-1201-jdbc41.jar")
-      sparkCtx.addJar(s"${hdfsPath}sqlite-jdbc-3.16.1.jar")
-      sparkCtx.addJar(s"${hdfsPath}spark-xml_${scalaVersion}-0.5.0.jar")
-      sparkCtx.addJar(s"${hdfsPath}spark-excel_${scalaVersion}-0.12.0.jar")
-      sparkCtx.addJar(s"${hdfsPath}google-api-services-sheets-v4-rev18-1.22.0.jar")
-      sparkCtx.addJar(s"${hdfsPath}google-api-client-1.22.0.jar")
-      sparkCtx.addJar(s"${hdfsPath}google-api-client-json-1.2.2-alpha.jar")
-      sparkCtx.addJar(s"${hdfsPath}google-api-client-util-1.2.2-alpha.jar")
-      sparkCtx.addJar(s"${hdfsPath}sparsity_${scalaVersion}-${sparsityVersion}.jar")
-      sparkCtx.addJar(s"${hdfsPath}fastparse_${scalaVersion}-2.1.0.jar")
-      sparkCtx.addFile(s"${hdfsPath}$credentialName")
-      sparkCtx.addJar(s"${hdfsPath}geospark-sql_2.3-1.2.0.jar")
-      sparkCtx.addJar(s"${hdfsPath}scallop_${scalaVersion}-3.1.3.jar")
-      
+
+      for(jar <- requiredJars){
+        sparkCtx.addJar(s"${hdfsPath}${jar.getName()}")
+      }
+
       FileUtils.getListOfFiles(config.sparkJars()).map(file => {
         if(file.getName.endsWith(".jar")){
           HadoopUtils.writeToHDFS(sparkCtx, file.getName, file, overwriteJars)
@@ -230,10 +232,35 @@ object MimirSpark
     GeoSparkSQLRegistrator.registerAll(sparkSession)  
   }
   
-  def getJarPath(repoPath:String, libName:String, libVersion:String, scalaVersion:String):String = {
-    val libIvyPath = s"${System.getProperty("user.home")}/.ivy2/cache/${repoPath}/${libName}_${scalaVersion}/jars/${libName}_${scalaVersion}-${libVersion}.jar"
-    val libM2Path = s"${System.getProperty("user.home")}/.m2/repository/${repoPath.replaceAll("\\.", "/")}/${libName}_${scalaVersion}/${libVersion}/${libName}_${scalaVersion}-${libVersion}.jar"
-    if(new File(libIvyPath).exists() ) libIvyPath else libM2Path
+  def getJarPath(repoPath:String, libName:String, libVersion:String):File = {
+    val jarName = s"${libName}-${libVersion}.jar"
+    if(jarName.beginsWith("mimir_")){
+      //special case the mimir jar itself, just in case we're running a unit test
+      jarPaths.get(jarName)
+              .getOrElse { 
+                
+              }
+
+    } else {
+      jarPaths.get(jarName)
+              .getOrElse { 
+                logger.warn(s"$jarName is not in the classpath.  Guessing based on systemwide Ivy or M2 paths")
+                val guesses = Seq(
+                  // Ivy
+                  s"${System.getProperty("user.home")}/.ivy2/cache/${repoPath}/${libName}/jars/$jarName",
+
+                  // M2
+                  s"${System.getProperty("user.home")}/.m2/repository/${repoPath.replaceAll("\\.", "/")}/${libName}/${libVersion}/$jarName"
+                ).map { new File(_) }
+                 .filter { _.exists() }
+
+                if(guesses.isEmpty){
+                  throw new RuntimeException(s"No clue where to find required jar file ${jarName}")
+                } else { 
+                  guesses.head
+                }
+              }
+    }
   }
 
   def close() = {
