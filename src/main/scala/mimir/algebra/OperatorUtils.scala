@@ -4,6 +4,7 @@ import java.sql._
 
 import mimir.util.RandUtils
 import com.typesafe.scalalogging.LazyLogging
+import mimir.views.ViewManager
 
 object OperatorUtils extends LazyLogging {
     
@@ -32,6 +33,19 @@ object OperatorUtils extends LazyLogging {
         	columnExprForOperator(col, rhs)
       case _ => 
         List[(Expression,Operator)]((Var(col), oper))
+    }
+  }
+
+  /**
+   * Identify all tables on which this operator depends
+   */
+  def findTables(o: Operator, descendIntoViews: Boolean = false): Set[(ID, ID)] =
+  {
+    o match {
+      case Table(name, source, _, _) => Set((source, name))
+      case View(name, _, _) if !descendIntoViews => Set((ViewManager.SCHEMA, name))
+      case AdaptiveView(schema, name, _, _) if !descendIntoViews => Set((schema, name))
+      case _ => o.children.flatMap { findTables(_, descendIntoViews) }.toSet
     }
   }
 

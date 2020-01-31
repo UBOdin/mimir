@@ -128,7 +128,8 @@ case class CreateViewRequest (
                   query: String
 )  extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(CreateViewResponse(MimirVizier.createView(input, query)))).getBytes )
+    val (viewName, dependencies) = MimirVizier.createView(input, query)
+    os.write(Json.stringify(Json.toJson(CreateViewResponse(viewName, dependencies.toSeq))).getBytes )
   }
 }
 
@@ -143,7 +144,8 @@ case class CreateViewSRequest (
                   query: String
 )  extends Request {
   def handle(os:OutputStream) = {
-    os.write(Json.stringify(Json.toJson(CreateViewResponse(MimirVizier.createView(input, query)))).getBytes )
+    val (viewName, dependencies) = MimirVizier.createView(input, query)
+    os.write(Json.stringify(Json.toJson(CreateViewResponse(viewName, dependencies.toSeq))).getBytes )
   }
 }
 

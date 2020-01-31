@@ -46,7 +46,8 @@ import mimir.util.{
   JSONBuilder,
   LoggerUtils,
   ExperimentalOptions,
-  Timer
+  Timer,
+  SqlUtils
 }
 import java.sql.SQLException
 import mimir.ctables.CoarseDependency
@@ -604,7 +605,7 @@ vizierdb <- VizierDB${"$new()"}
     )
   }
   
-  def createView(input : Any, query : String) : String = {
+  def createView(input : Any, query : String) : (String, Set[String]) = {
     try{
     apiCallThread = Thread.currentThread()
     val timeRes = logTime("createLens") {
@@ -638,11 +639,12 @@ vizierdb <- VizierDB${"$new()"}
       val viewQuery = MimirSQL.Select(inputSubstitutionQuery).body
       logger.debug("createView: query: " + viewQuery)
       db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
-
-      viewName
+      val dependencies = SqlUtils.getReferencedTables(viewQuery)
+      
+      return (viewName, dependencies.map { _._2.name })
     }
     logger.debug(s"createView ${timeRes._1.toString} Took: ${timeRes._2}")
-    timeRes._1.toString
+    timeRes._1
     } catch {
       case t: Throwable => {
         logger.error("Error Creating View: [" + input + "] [" + query + "]", t)
