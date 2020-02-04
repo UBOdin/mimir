@@ -49,6 +49,7 @@ import java.net.InetAddress
 import org.datasyslab.geospark.serde.GeoSparkKryoRegistrator
 import org.datasyslab.geosparksql.utils.GeoSparkSQLRegistrator
 import org.apache.spark.sql.geosparksql.expressions.ST_Point
+import scala.sys.process._
 
 object MimirSpark
   extends LazyLogging
@@ -171,11 +172,9 @@ object MimirSpark
         ("com.crealytics",             "spark-excel",                "0.12.0",          true),
         ("com.google.apis",            "google-api-services-sheets", "v4-rev18-1.22.0", false),
         ("com.google.api-client",      "google-api-client",          "1.22.0",          false),
-        ("com.google.api.client",      "google-api-client-json",     "1.2.2-alpha",     false),
-        ("com.google.api.client",      "google-api-client-util",     "1.2.2-alpha",     false),
         ("com.lihaoyi",                "fastparse",                  "2.1.0"    ,       true),
         ("info.mimirdb",               "sparsity",                   sparsityVersion,   true),
-        ("org.datasyslab",             "geospark-sql",               "2.3-1.2.0",       false),
+        ("org.datasyslab",             "geospark-sql_2.3",           "1.2.0",           false),
         ("org.rogach",                 "scallop",                    "3.1.3",           true)
       ).map { case (domain, artifact, version, isScala) => 
                 val extendedArtifact = 
@@ -234,32 +233,34 @@ object MimirSpark
   
   def getJarPath(repoPath:String, libName:String, libVersion:String):File = {
     val jarName = s"${libName}-${libVersion}.jar"
-    if(jarName.beginsWith("mimir_")){
-      //special case the mimir jar itself, just in case we're running a unit test
-      jarPaths.get(jarName)
-              .getOrElse { 
-                
-              }
 
+    if(jarPaths.contains(jarName)){
+      return jarPaths(jarName)
+    } else if(jarName.startsWith("mimir-core_") && jarPaths.contains("classes")) {
+      // special case the mimir-core jar, since we might be running in a unit test
+      val f = File.createTempFile(s"${libName}-${libVersion}", ".jar")
+      val cmd = Seq[String]("jar", "cvf", f.toString, "-C", jarPaths("classes").toString, ".")
+      logger.warn(s"Creating temporary mimir-core jar for testing : ${cmd.mkString(" ")}")
+      cmd.!!
+      logger.warn(s"Done creating temporary mimir-core jar for testing: $f")
+      f.deleteOnExit()
+      return f
     } else {
-      jarPaths.get(jarName)
-              .getOrElse { 
-                logger.warn(s"$jarName is not in the classpath.  Guessing based on systemwide Ivy or M2 paths")
-                val guesses = Seq(
-                  // Ivy
-                  s"${System.getProperty("user.home")}/.ivy2/cache/${repoPath}/${libName}/jars/$jarName",
+      logger.warn(s"$jarName is not in the classpath.  Guessing based on systemwide Ivy or M2 paths")
+      val guesses = Seq(
+        // Ivy
+        s"${System.getProperty("user.home")}/.ivy2/cache/${repoPath}/${libName}/jars/$jarName",
 
-                  // M2
-                  s"${System.getProperty("user.home")}/.m2/repository/${repoPath.replaceAll("\\.", "/")}/${libName}/${libVersion}/$jarName"
-                ).map { new File(_) }
-                 .filter { _.exists() }
+        // M2
+        s"${System.getProperty("user.home")}/.m2/repository/${repoPath.replaceAll("\\.", "/")}/${libName}/${libVersion}/$jarName"
+      ).map { new File(_) }
+       .filter { _.exists() }
 
-                if(guesses.isEmpty){
-                  throw new RuntimeException(s"No clue where to find required jar file ${jarName}")
-                } else { 
-                  guesses.head
-                }
-              }
+      if(guesses.isEmpty){
+        throw new RuntimeException(s"No clue where to find required jar file ${jarName}")
+      } else { 
+        return guesses.head
+      }
     }
   }
 
