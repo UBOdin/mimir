@@ -138,6 +138,7 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
+       HadoopUtils.writeToHDFS(sparkCtx, "geospark-1.2.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.datasyslab/geospark/jars/geospark-1.2.0.jar"), overwriteJars)
        HadoopUtils.writeToHDFS(sparkCtx, "geospark-sql_2.3-1.2.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.datasyslab/geospark-sql_2.3/jars/geospark-sql_2.3-1.2.0.jar"), overwriteJars)
       
       //sparkCtx.addJar("https://maven.mimirdb.info/info/mimirdb/mimir-core_2.11/0.2/mimir-core_2.11-0.2.jar")
@@ -154,6 +155,7 @@ object MimirSpark
       sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-${sparsityVersion}.jar")
       sparkCtx.addJar(s"$hdfsHome/fastparse_2.11-2.1.0.jar")
       sparkCtx.addFile(s"$hdfsHome/$credentialName")
+      sparkCtx.addJar(s"$hdfsHome/geospark-1.2.0.jar")
       sparkCtx.addJar(s"$hdfsHome/geospark-sql_2.3-1.2.0.jar")
       
       FileUtils.getListOfFiles(config.sparkJars()).map(file => {
