@@ -641,10 +641,10 @@ vizierdb <- VizierDB${"$new()"}
       db.update(SQLStatement(CreateView(Name(viewName, true), false, viewQuery)))
       val dependencies = SqlUtils.getReferencedTables(viewQuery)
       
-      return (viewName, dependencies.map { _._2.name })
+      (viewName, dependencies.map { _._2.name })
     }
     logger.debug(s"createView ${timeRes._1.toString} Took: ${timeRes._2}")
-    timeRes._1
+    return timeRes._1
     } catch {
       case t: Throwable => {
         logger.error("Error Creating View: [" + input + "] [" + query + "]", t)
