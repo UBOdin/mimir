@@ -57,6 +57,7 @@ object MimirSpark
   private lazy val envHasS3Keys = !s3AccessKey.isEmpty && !s3SecretKey.isEmpty
   def remoteSpark = ExperimentalOptions.isEnabled("remoteSpark")
   var sheetCred: String = null
+  val sparsityVersion = sparsity.parser.SQL.getClass().getPackage().getImplementationVersion()
 
   def get: SQLContext = {
     if(sparkSql == null){ 
@@ -132,7 +133,7 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, "sqlite-jdbc-3.16.1.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.xerial/sqlite-jdbc/jars/sqlite-jdbc-3.16.1.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "spark-xml_2.11-0.5.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.databricks/spark-xml_2.11/jars/spark-xml_2.11-0.5.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "spark-excel_2.11-0.11.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.crealytics/spark-excel_2.11/jars/spark-excel_2.11-0.11.0.jar"), overwriteJars)
-      HadoopUtils.writeToHDFS(sparkCtx, "sparsity_2.11-1.5.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/info.mimirdb/sparsity_2.11/jars/sparsity_2.11-1.5.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, s"sparsity_2.11-${sparsityVersion}.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/info.mimirdb/sparsity_2.11/jars/sparsity_2.11-${sparsityVersion}.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "fastparse_2.11-2.1.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.lihaoyi/fastparse_2.11/jars/fastparse_2.11-2.1.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
@@ -150,7 +151,7 @@ object MimirSpark
       sparkCtx.addJar(s"$hdfsHome/sqlite-jdbc-3.16.1.jar")
       sparkCtx.addJar(s"$hdfsHome/spark-xml_2.11-0.5.0.jar")
       sparkCtx.addJar(s"$hdfsHome/spark-excel_2.11-0.11.0.jar")
-      sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-1.5.jar")
+      sparkCtx.addJar(s"$hdfsHome/sparsity_2.11-${sparsityVersion}.jar")
       sparkCtx.addJar(s"$hdfsHome/fastparse_2.11-2.1.0.jar")
       sparkCtx.addFile(s"$hdfsHome/$credentialName")
       sparkCtx.addJar(s"$hdfsHome/geospark-sql_2.3-1.2.0.jar")
