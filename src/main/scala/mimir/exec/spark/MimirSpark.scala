@@ -169,6 +169,7 @@ object MimirSpark
       HadoopUtils.writeToHDFS(sparkCtx, s"$credentialName",new File(s"test/data/$credentialName"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "aws-java-sdk-s3-1.11.355.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/com.amazonaws/aws-java-sdk-s3/jars/aws-java-sdk-s3-1.11.355.jar"), overwriteJars)
       //HadoopUtils.writeToHDFS(sparkCtx, "hadoop-aws-2.7.6.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.apache.hadoop/hadoop-aws/jars/hadoop-aws-2.7.6.jar"), overwriteJars)
+      HadoopUtils.writeToHDFS(sparkCtx, "geospark-1.2.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.datasyslab/geospark/jars/geospark-1.2.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, "geospark-sql_2.3-1.2.0.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.datasyslab/geospark-sql_2.3/jars/geospark-sql_2.3-1.2.0.jar"), overwriteJars)
       HadoopUtils.writeToHDFS(sparkCtx, s"scallop_${scalaVersion}-3.1.3.jar", new File(s"${System.getProperty("user.home")}/.ivy2/cache/org.rogach/scallop_${scalaVersion}/jars/scallop_${scalaVersion}-3.1.3.jar"), overwriteJars)
       
@@ -188,6 +189,7 @@ object MimirSpark
       sparkCtx.addJar(s"${hdfsPath}sparsity_${scalaVersion}-${sparsityVersion}.jar")
       sparkCtx.addJar(s"${hdfsPath}fastparse_${scalaVersion}-2.1.0.jar")
       sparkCtx.addFile(s"${hdfsPath}$credentialName")
+      sparkCtx.addJar(s"${hdfsPath}geospark-1.2.0.jar")
       sparkCtx.addJar(s"${hdfsPath}geospark-sql_2.3-1.2.0.jar")
       sparkCtx.addJar(s"${hdfsPath}scallop_${scalaVersion}-3.1.3.jar")
       
