@@ -123,10 +123,8 @@ testGrouping in Test := {
 }
 
 
-resolvers += "MimirDB" at "http://maven.mimirdb.info/"
-resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
-resolvers += "Boundless" at "http://repo.boundlessgeo.com/main"
-resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
+resolvers += "MimirDB" at "https://maven.mimirdb.info/"
+resolvers += "MVNRepository" at "https://mvnrepository.com/artifact/"
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
 resolvers += Resolver.mavenLocal
 
