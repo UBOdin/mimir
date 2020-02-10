@@ -23,16 +23,6 @@ object DetectHeader {
       }
     })
   }
-}
-
-@SerialVersionUID(1002L)
-class DetectHeaderModel(override val name: ID, val descriptiveName: String, val columns:Seq[ID], val trainingData:Seq[Seq[PrimitiveValue]])
-extends Model(name)
-with Serializable
-with SourcedFeedback
-{
-  var headerDetected = false
-  var initialHeaders: Map[Int, ID] = Map()
   
   private def sanitizeColumnName(name: String): ID =
   {
@@ -44,11 +34,9 @@ with SourcedFeedback
     )
   }
   
-  def detect_header(): (Boolean, Map[Int, ID]) = {
+  def detect_header(columns:Seq[ID], trainingData:Seq[Seq[PrimitiveValue]]): (Boolean, Map[Int, ID]) = {
     if(trainingData.isEmpty){
-      headerDetected = false
-      initialHeaders = columns.zipWithIndex.map(el => (el._2 , el._1)).toMap
-      (headerDetected, initialHeaders)
+      (false, columns.zipWithIndex.map(el => (el._2 , el._1)).toMap)
     }
     else
     {
@@ -111,12 +99,17 @@ with SourcedFeedback
         }
         case x => (false, header.zipWithIndex.map { x => (x._2, ID("COLUMN_"+x._2)) }.toMap)
       }
-      headerDetected = detectResult._1
-      initialHeaders = detectResult._2
       detectResult
     }
   }
+}
 
+@SerialVersionUID(1003L)
+class DetectHeaderModel(override val name: ID, val descriptiveName: String, val headerDetected:Boolean, val initialHeaders: Map[Int, ID])
+extends Model(name)
+with Serializable
+with SourcedFeedback
+{
   
   def argTypes(idx: Int) = {
     Seq(TInt())

@@ -386,6 +386,12 @@ vizierdb <- VizierDB${"$new()"}
         case _ => throw new Exception("loadDataSource: bad options type")
       }
       
+      val projectId = bkOpts.filter { _._1.equalsIgnoreCase("projectId") }
+                                   .headOption
+                                   .map { _._2 }                             
+      val bkOptsToUse = bkOpts.filterNot { x => 
+        x._1.equalsIgnoreCase("projectId")}
+                                   
       val saferFile = URLDecoder.decode(file, "utf-8")
       val useS3Volume = System.getenv("USE_S3_VOLUME") match {
         case null => false
@@ -401,12 +407,12 @@ vizierdb <- VizierDB${"$new()"}
         saferFile
       }
       val fileName = new File(csvFile).getName().split("\\.")(0)
-      val tableName = sanitizeTableName(fileName)
+      val tableName = sanitizeTableName(s"${fileName}${projectId.getOrElse("")}")
       if(db.catalog.tableExists(tableName)){
         logger.debug("loadDataSource: From Vistrails: Table Already Exists: " + tableName)
       }
       else{
-        val loadOptions = bkOpts.toMap
+        val loadOptions = bkOptsToUse.toMap
         db.loader.loadTable(
           sourceFile = csvFile,
           targetTable = Some(tableName), 

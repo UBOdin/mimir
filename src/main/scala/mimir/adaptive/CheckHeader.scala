@@ -23,14 +23,15 @@ object CheckHeader
   {
     val viewName = config.schema
     val modelName = ID("MIMIR_CH_", viewName)
+    val (headerDetected, initialHeaders) = DetectHeader.detect_header(config.query.columnNames, 
+        db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq)
     val detectmodel = 
       new DetectHeaderModel(
         modelName, 
         config.humanReadableName, 
-        config.query.columnNames, 
-        db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq
+        headerDetected,
+        initialHeaders
       )
-    detectmodel.detect_header()
     Seq(detectmodel)
   }
 
@@ -91,7 +92,7 @@ object CheckHeader
         
         // And then rename columns accordingly
         oper = oper.renameByID(
-          model.columns
+          config.query.columnNames
                .zipWithIndex
                .map { case (col, idx) => 
                   // the model takes the column index and returns a string
