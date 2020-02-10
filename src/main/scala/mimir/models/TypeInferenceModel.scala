@@ -134,11 +134,12 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
 
   def voteList(idx:Int) =  
     (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: 
-      (trainingData(idx)._2.map { votedType => 
+      (if(trainingData.isEmpty) Seq() else trainingData(idx)._2.map { votedType => 
         (votedType._1 -> (votedType._2._1, votedType._2._2))
       }).toList 
     
-  def totalVotes(idx:Int) = trainingData(idx)._1 
+  def totalVotes(idx:Int) = if(trainingData.isEmpty) 0L else trainingData(idx)._1 
+  
      
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )
