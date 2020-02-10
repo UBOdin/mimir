@@ -1,7 +1,7 @@
 import scala.sys.process._
 
 name := "Mimir-Core"
-version := "0.3"
+version := "0.3.1"
 organization := "info.mimirdb"
 scalaVersion := "2.12.10"
 

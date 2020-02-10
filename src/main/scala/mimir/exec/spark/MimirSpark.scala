@@ -90,6 +90,7 @@ object MimirSpark
     val dataDir = config.dataDirectory()
     val scalaVersion = util.Properties.versionNumberString.substring(0,util.Properties.versionNumberString.lastIndexOf('.'))
     val sparsityVersion = sparsity.parser.SQL.getClass().getPackage().getImplementationVersion()
+    val mimirVersion = MimirSpark.getClass().getPackage().getImplementationVersion()
     
     val sparkBuilder = (if(remoteSpark){
       SparkSession.builder.master(s"spark://$sparkHost:$sparkPort")
@@ -161,7 +162,7 @@ object MimirSpark
       //sparkCtx.hadoopConfiguration.set("hive.metastore.warehouse.dir",s"${hdfsPath}metastore_db")
 
       val requiredJars = Seq(
-        ("info.mimirdb",               "mimir-core",                 "0.3",             true),
+        ("info.mimirdb",               "mimir-core",                 mimirVersion,      true),
         ("com.typesafe.scala-logging", "scala-logging",              "3.9.2",           true),
         ("com.typesafe.play",          "play-json",                  "2.7.0-M1",        true),
         ("com.typesafe.play",          "play-functional",            "2.7.0-M1",        true),
