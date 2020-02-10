@@ -250,7 +250,7 @@ object MimirSpark
       val guesses = Seq(
         // Ivy
         s"${System.getProperty("user.home")}/.ivy2/cache/${repoPath}/${libName}/jars/$jarName",
-
+        s"${System.getProperty("user.home")}/.ivy2/cache/${repoPath}/${libName}/bundles/$jarName",
         // M2
         s"${System.getProperty("user.home")}/.m2/repository/${repoPath.replaceAll("\\.", "/")}/${libName}/${libVersion}/$jarName"
       ).map { new File(_) }
