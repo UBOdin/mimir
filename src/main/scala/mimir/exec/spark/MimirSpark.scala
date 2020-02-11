@@ -91,7 +91,7 @@ object MimirSpark
     val scalaVersion = util.Properties.versionNumberString.substring(0,util.Properties.versionNumberString.lastIndexOf('.'))
     val sparsityVersion = sparsity.parser.SQL.getClass().getPackage().getImplementationVersion()
     val mimirVersion = MimirSpark.getClass().getPackage().getImplementationVersion()
-    
+    logger.info(s"mimir version: $mimirVersion")
     val sparkBuilder = (if(remoteSpark){
       SparkSession.builder.master(s"spark://$sparkHost:$sparkPort")
         .config("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)

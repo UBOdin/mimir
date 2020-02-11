@@ -13,6 +13,7 @@ import mimir.models._
 import mimir.views._
 import mimir.statistics.FuncDep
 import mimir.provenance.Provenance
+import mimir.exec.spark.RAToSpark
 
 object CheckHeader
   extends Multilens
@@ -23,8 +24,17 @@ object CheckHeader
   {
     val viewName = config.schema
     val modelName = ID("MIMIR_CH_", viewName)
+    val dhOp = Limit(0,Some(6),config.query)
+    //TODO:  This is a temporary fix for detect headers when there are multiple partitions 
+    //  spark is returning the first X rows for limit queries from a nondeterministic partition
+    //val td = db.query(dhOp)(_.toList.map(_.tuple)).toSeq
+    val td = db.compiler.compileToSparkWithRewrites(config.query)
+        .take(6).map(row => row.toSeq.map(spel => 
+          RAToSpark.sparkInternalRowValueToMimirPrimitive(spel))
+          ).toSeq
     val (headerDetected, initialHeaders) = DetectHeader.detect_header(config.query.columnNames, 
-        db.query(Limit(0,Some(6),config.query))(_.toList.map(_.tuple)).toSeq)
+        td)
+    db.compiler.compileToSparkWithRewrites(config.query).take(6).map(_.toString())
     val detectmodel = 
       new DetectHeaderModel(
         modelName, 
