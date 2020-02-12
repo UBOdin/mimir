@@ -158,13 +158,13 @@ case class RowIndexPlan(val lp:LogicalPlan,  val schema:Seq[(ID,Type)], val offs
    */
   def getPlan(db:Database) = {
     org.apache.spark.sql.catalyst.plans.logical.Project(
-      unresolvedAttributes :+ UnresolvedAttribute(indexName), 
+      unresolvedAttributes :+ UnresolvedAttribute(indexName) :+ UnresolvedAttribute("partition_offset"), 
       org.apache.spark.sql.catalyst.plans.logical.Project(
         unresolvedAttributes :+
         Alias(org.apache.spark.sql.catalyst.expressions.Cast(
             Add(UnresolvedAttribute("partition_offset"), 
                 Add(UnresolvedAttribute("inc_id"),UnresolvedAttribute("row_hash")))
-                ,StringType),indexName)(),
+                ,StringType),indexName)() :+ UnresolvedAttribute("partition_offset"),
         org.apache.spark.sql.catalyst.plans.logical.Project(
           unresolvedAttributes ++
           Seq(Alias(getUDF(db),"partition_offset")(), UnresolvedAttribute("inc_id"), UnresolvedAttribute("row_hash")), partOp)))    

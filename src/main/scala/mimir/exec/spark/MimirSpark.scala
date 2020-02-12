@@ -128,7 +128,7 @@ object MimirSpark
         .appName("Mimir")
         .config("spark.driver.cores","4")
         .config("spark.driver.memory",  config.sparkDriverMem())
-        .config("spark.executor.memory", "8g")
+        .config("spark.executor.memory", config.sparkExecutorMem())
         .config("spark.executor.instances", "1")
         //.config("spark.executor.cores", "5")
         .config("spark.sql.catalogImplementation", "hive")
