@@ -6,7 +6,7 @@ import mimir.Database
 import mimir.models._
 import mimir.algebra._
 import mimir.ctables._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 object RepairKeyLens extends LazyLogging {
   def create(

@@ -4,7 +4,7 @@ import java.io._
 import scala.io._
 import scala.sys.process._
 import scala.util.matching.Regex
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 object PythonProcess 
   extends LazyLogging

@@ -3,7 +3,7 @@ package mimir.algebra
 import java.sql._
 
 import mimir.util.RandUtils
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import mimir.views.ViewManager
 
 object OperatorUtils extends LazyLogging {

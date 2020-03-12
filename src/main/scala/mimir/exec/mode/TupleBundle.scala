@@ -8,7 +8,7 @@ import mimir.provenance._
 import mimir.exec._
 import mimir.exec.result._
 import mimir.models.Model
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * TupleBundles ( http://dl.acm.org/citation.cfm?id=1376686 ) are a tactic for

@@ -2,7 +2,7 @@ package mimir.algebra;
 
 import java.sql._;
 import java.util.NoSuchElementException;
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import mimir.Database
 import mimir.algebra.function._

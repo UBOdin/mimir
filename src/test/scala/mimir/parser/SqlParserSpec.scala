@@ -8,7 +8,7 @@ import org.specs2.mutable._
 import org.specs2.matcher.FileMatchers
 import org.specs2.specification._
 import org.specs2.specification.core.{Fragment,Fragments}
-import com.typesafe.scalalogging.slf4j.Logger
+import com.typesafe.scalalogging.Logger
 
 import sparsity.Name
 import sparsity.parser.SQL

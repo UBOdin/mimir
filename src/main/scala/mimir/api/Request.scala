@@ -19,7 +19,7 @@ case class CodeEvalRequest (
 ) extends Request {
   def handle(os:OutputStream) = {
     language match {
-      case "R" => os.write(Json.stringify(Json.toJson(MimirVizier.evalR(source))).getBytes )
+      case "R" => os.write(Json.stringify(Json.toJson(MimirVizier.evalR(input, source))).getBytes )
       case "scala" => os.write(Json.stringify(Json.toJson(MimirVizier.evalScala(input, source))).getBytes )
     }
     
@@ -108,7 +108,7 @@ case class CreateLensRequest (
       MimirVizier.createLens(
         input, 
         params, 
-        `type`,  
+        `type`, 
         materialize, 
         humanReadableName = humanReadableName
       )

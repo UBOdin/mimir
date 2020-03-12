@@ -1,6 +1,6 @@
 package mimir.optimizer.operator
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import mimir.optimizer.OperatorOptimization
 import mimir.algebra._
 import mimir.algebra.function._

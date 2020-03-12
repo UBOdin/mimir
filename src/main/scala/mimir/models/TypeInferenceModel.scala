@@ -1,7 +1,7 @@
 package mimir.models
 
 import scala.util.Random
-import com.typesafe.scalalogging.slf4j.Logger
+import com.typesafe.scalalogging.Logger
 
 import mimir.Database
 import mimir.algebra._
@@ -109,10 +109,12 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
   private def train(df:DataFrame) =
   {
     import sparkSql.implicits._
-    df.limit(TypeInferenceModel.sampleLimit)
+    val aggdf = df.limit(TypeInferenceModel.sampleLimit)
       .select(columns.map{_.id}.map{col(_)}:_*)
       .agg(new VoteList().toColumn)
-      .head()
+    if(aggdf.isEmpty)
+      throw new Exception("Can not train TypeInferenceModel on an empty dataset.")
+    else aggdf.head()
       .asInstanceOf[Row].toSeq(0).asInstanceOf[Seq[Row]]
       .map(el => (el.getLong(0), el.getMap[Int,Row](1).toMap) )
       .map(el => (el._1, el._2.map(sel => (sel._1 -> (sel._2.getLong(0), sel._2.getDouble(1))))))
@@ -132,11 +134,12 @@ class TypeInferenceModel(name: ID, val descriptiveName: String, val columns: Ind
 
   def voteList(idx:Int) =  
     (Type.id(TString()) -> ((defaultFrac * totalVotes(idx)).toLong, defaultFrac)) :: 
-      (trainingData(idx)._2.map { votedType => 
+      (if(trainingData.isEmpty) Seq() else trainingData(idx)._2.map { votedType => 
         (votedType._1 -> (votedType._2._1, votedType._2._2))
       }).toList 
     
-  def totalVotes(idx:Int) = trainingData(idx)._1 
+  def totalVotes(idx:Int) = if(trainingData.isEmpty) 0L else trainingData(idx)._1 
+  
      
   private final def rankFn(x:(Type, Double)) =
     (x._2, TypeInferenceModel.priority(x._1) )

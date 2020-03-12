@@ -4,7 +4,7 @@ import java.net.URL
 import java.io.{ File, InputStream, OutputStream, FileOutputStream }
 import java.sql.SQLException
 import scala.util.Random
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.sql.DataFrame
 import mimir.algebra.ID
 import mimir.util.HadoopUtils

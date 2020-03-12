@@ -58,8 +58,14 @@ object SparkUtils {
             }
           }
         } })
-
-      case TString() =>     (r) => checkNull(r, { StringPrimitive(r.getString(field)) })
+      //TODO: This is a work around for when loading data from jdbc spark datasource the schema is
+        // not being interpreted by mimir correctly and everything is varchars in mimir 
+        // but the underlying types are different so r.getString errors.  I need to fix the 
+        // jdbc loads to use the correct schema in mimir: Mike 10/2019
+      case TString() =>     (r) => checkNull(r, { r.get(field) match { 
+        case s:String => StringPrimitive(s)
+        case x => StringPrimitive(x.toString())
+        } })
       case TRowId() =>      (r) => checkNull(r, { RowIdPrimitive(r.getString(field)) })
       case TBool() =>       (r) => checkNull(r, { 
         try {

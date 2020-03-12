@@ -3,7 +3,7 @@ package mimir.exec
 
 import java.sql._
 import org.slf4j.{LoggerFactory}
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import scala.util.Random
 import com.github.nscala_time.time.Imports._
 import org.apache.spark.sql.{Dataset, DataFrame, SaveMode}

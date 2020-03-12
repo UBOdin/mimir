@@ -2,7 +2,7 @@ package mimir.plot
 
 import mimir.Database
 import mimir.algebra._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 object Heuristics 
   extends LazyLogging

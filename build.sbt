@@ -1,9 +1,9 @@
 import scala.sys.process._
 
 name := "Mimir-Core"
-version := "0.3-SNAPSHOT"
+version := "0.3.1"
 organization := "info.mimirdb"
-scalaVersion := "2.11.11"
+scalaVersion := "2.12.10"
 
 dependencyOverrides += "org.scala-lang" % "scala-library" % scalaVersion.value
 
@@ -123,36 +123,40 @@ testGrouping in Test := {
 }
 
 
-resolvers += "MimirDB" at "http://maven.mimirdb.info/"
-resolvers += "osgeo" at "http://download.osgeo.org/webdav/geotools/"
-resolvers += "Boundless" at "http://repo.boundlessgeo.com/main"
-resolvers += "MVNRepository" at "http://mvnrepository.com/artifact/"
+resolvers += "MimirDB" at "https://maven.mimirdb.info/"
+resolvers += "MVNRepository" at "https://mvnrepository.com/artifact/"
 resolvers ++= Seq("snapshots", "releases").map(Resolver.sonatypeRepo)
+resolvers += Resolver.mavenLocal
 
 updateOptions := updateOptions.value.withGigahorse(false)
 
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % "2.9.10"
+dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.10"
+dependencyOverrides += "com.fasterxml.jackson.module" % "jackson-module-scala_2.12" % "2.9.10"
+
+
 libraryDependencies ++= Seq(
   ////////////////////// Command-Line Interface Utilities //////////////////////
-  "org.rogach"                    %%  "scallop"                  % "0.9.5",
+  "org.rogach"                    %%  "scallop"                  % "3.1.3",
   "org.jline"                     %   "jline"                    % "3.2.0",
-  "info.mimirdb"                  %%  "sparsity"                 % "1.6.2",
+  "info.mimirdb"                  %%  "sparsity"                 % "1.7.0",
   "com.lihaoyi"                   %%  "fastparse"                % "2.1.0",
   "org.apache.commons"            %   "commons-text"             % "1.8",
 
   ////////////////////// Dev Tools -- Logging, Testing, etc... //////////////////////
-  "com.typesafe.scala-logging"    %%  "scala-logging-slf4j"      % "2.1.2",
-  "ch.qos.logback"                %   "logback-classic"          % "1.1.7",
-  "org.specs2"                    %%  "specs2-core"              % "3.8.4" % "test",
-  "org.specs2"                    %%  "specs2-matcher-extra"     % "3.8.4" % "test",
-  "org.specs2"                    %%  "specs2-junit"             % "3.8.4" % "test",
-  "org.clapper"                   %%  "classutil"                % "1.4.0",
-  "com.amazonaws"                 %   "aws-java-sdk-s3"          % "1.11.234",
-  "ch.cern.sparkmeasure"          %%  "spark-measure"            % "0.13",
-  "org.scala-lang"                %   "scala-compiler"           % scalaVersion.value,
+  "com.typesafe.scala-logging"    %%  "scala-logging"            % "3.9.2",
+  "ch.qos.logback"                %   "logback-classic"          % "1.2.3",
+  "org.specs2"                    %%  "specs2-core"              % "4.6.0" % "test",
+  "org.specs2"                    %%  "specs2-matcher-extra"     % "4.6.0" % "test",
+  "org.specs2"                    %%  "specs2-junit"             % "4.6.0" % "test",
+  "org.clapper"                   %%  "classutil" 				 % "1.1.2",
+  "com.amazonaws" 				  %   "aws-java-sdk-s3" 		 % "1.11.234",
+  //"ch.cern.sparkmeasure" 		  %%  "spark-measure" 			 % "0.13",
+  "org.scala-lang" 				  %   "scala-compiler" 		 	 % "2.12.7",
   "org.ddahl" 					  %%  "rscala" 					 % "3.2.15",
   
   //////////////////////// Data Munging Tools //////////////////////
-  "com.github.nscala-time"        %%  "nscala-time"              % "1.2.0",
+  "com.github.nscala-time"        %%  "nscala-time"              % "2.20.0",
   "org.apache.lucene"             %   "lucene-spellchecker"      % "3.6.2",
   "org.apache.servicemix.bundles" %   "org.apache.servicemix.bundles.collections-generic" 
                                                                  % "4.01_1",
@@ -160,9 +164,10 @@ libraryDependencies ++= Seq(
   "org.apache.commons"            %   "commons-csv"              % "1.4",
   "commons-io"                    %   "commons-io"               % "2.5",
   "com.github.wnameless"          %   "json-flattener"           % "0.2.2",
-  "com.typesafe.play"             %%  "play-json"                % "2.5.0-M2",
+  "com.typesafe.play"             %%  "play-json"                % "2.7.0-M1",
   "technology.tabula" 			  %	  "tabula" 					 % "1.0.3",
-
+  "org.apache.commons" 			  %   "commons-compress" 	 	 % "1.19",
+  
   //////////////////////// Lens Libraries //////////////////////
   // WEKA - General-purpose Classifier Training/Deployment Library
   // Used by the imputation lens
@@ -174,17 +179,19 @@ libraryDependencies ++= Seq(
   //   exclude("nz.ac.waikato.cms.weka.thirdparty", "java-cup-11b-runtime"),
     
   //spark ml
-  "org.apache.spark"         %   "spark-sql_2.11"                % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark"         %   "spark-mllib_2.11"              % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.spark"         %   "spark-hive_2.11"               % "2.4.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.databricks"           %   "spark-xml_2.11"                % "0.5.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "com.crealytics"           %%  "spark-excel"                   % "0.11.0" excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
-  "org.apache.hadoop"        %   "hadoop-client"                 % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
-  "org.apache.hadoop"        %   "hadoop-aws"                    % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
-  "net.java.dev.jets3t"      %   "jets3t"                        % "0.9.4",
-  ("com.google.api-client"   %   "google-api-client"             % "1.22.0").exclude("com.google.guava", "guava-jdk5"),
-  "com.google.oauth-client"  %   "google-oauth-client-jetty"     % "1.22.0",
-  "com.google.apis"          %   "google-api-services-sheets"    % "v4-rev18-1.22.0",
+  "org.apache.spark"         %   "spark-sql_2.12"          % "2.4.4",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-mllib_2.12"         % "2.4.4",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark"         %   "spark-hive_2.12"        % "2.4.4",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.databricks"           %   "spark-xml_2.12"            % "0.9.0",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  "com.sun.xml.txw2"         %   "txw2"                      % "20110809",
+  "com.crealytics"           %%  "spark-excel"                    % "0.12.0",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
+  //"com.google.api.client"    %   "google-api-client-json"         % "1.2.2-alpha",
+  "org.apache.hadoop"        %   "hadoop-client"          % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.hadoop"        %   "hadoop-aws"             % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
+  "net.java.dev.jets3t"      %   "jets3t"               % "0.9.4",
+  ("com.google.api-client"   %   "google-api-client"             % "1.30.9").exclude("com.google.guava", "guava-jdk5"),
+  "com.google.oauth-client"  %   "google-oauth-client-jetty"     % "1.30.6",
+  "com.google.apis"          %   "google-api-services-sheets"    % "v4-rev610-1.25.0",
   "org.datasyslab"           %   "geospark"                      % "1.2.0",
   "org.datasyslab"           %   "geospark-sql_2.3"                  % "1.2.0",
   
@@ -223,8 +230,8 @@ libraryDependencies ++= Seq(
   //"org.sameersingh.scalaplot"     % "scalaplot"               % "0.0.4",
 
   //////////////////////// Linear Solver /////////////////////////
-  "com.github.vagmcs"       %% "optimus"                % "2.0.0",
-  "com.github.vagmcs"       %% "optimus-solver-oj"      % "2.0.0"
+  "com.github.vagmcs"       %% "optimus"                % "3.1.0",
+  "com.github.vagmcs"       %% "optimus-solver-oj"      % "3.1.0"
 )
 
 

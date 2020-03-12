@@ -8,6 +8,7 @@ import mimir.algebra._
 import mimir.ctables._
 import mimir.parser._
 
+
 object CommentLens {
   def create(
     db: Database, 
@@ -39,6 +40,7 @@ object CommentLens {
       case Function(ID("result_columns"), cols:(Seq[Var] @unchecked)) => Some( cols.map(_.name) )
       case _ => None
     }.flatten
+    
     
     val argTypesAndExprs = colComments.zipWithIndex.map {
       case ((expr, comment, rowIdOpt), index) => {

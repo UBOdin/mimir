@@ -3,7 +3,7 @@ package mimir.data
 import java.io.File
 import java.sql.SQLException
 import play.api.libs.json._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.sql.DataFrame
 
 import mimir.Database
@@ -248,7 +248,7 @@ class LoadedTables(val db: Database)
       case None => throw new SQLException(s"Loaded table $tableName does not exist")
       case Some((_, config)) => {
         val cascadingDrops = parseMimirOptions(config)
-                                .getOrElse("cascadingDrops", { new JsArray(Seq()) })
+                                .getOrElse("cascadingDrops", { new JsArray(Seq[JsValue]().toIndexedSeq) })
                                 .as[Seq[Map[String, String]]]
         for(objectToDrop <- cascadingDrops) {
           objectToDrop("type") match {

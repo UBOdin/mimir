@@ -20,7 +20,7 @@ import java.sql.SQLException
 
 import org.apache.commons.text.WordUtils
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 import play.api.libs.json._

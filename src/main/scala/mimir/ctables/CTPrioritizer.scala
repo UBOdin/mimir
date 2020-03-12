@@ -2,6 +2,9 @@ package mimir.ctables;
 
 import optimus.optimization._
 import optimus.algebra._
+import optimus.algebra.AlgebraOps._
+import optimus.optimization.enums._
+import optimus.optimization.model._
 import mimir.ctables._
 import mimir.models._
 import mimir.algebra._
@@ -15,7 +18,7 @@ object CTPrioritizer {
 
 	def prioritize(reasons : Iterable[Reason]) : Option[(Array[Array[MPIntVar]],Array[MPFloatVar],Array[MPIntVar])]= {
 
-		implicit val problem = MIProblem(SolverLib.ojalgo)
+		implicit val problem = MPModel(SolverLib.oJSolver)
 
 		if(reasons.size != 0) {
 			val trcmap = collection.mutable.LinkedHashMap[(Model,Int,Seq[PrimitiveValue]),(Double,Double,Double)]()

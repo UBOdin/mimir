@@ -3,9 +3,9 @@ package mimir.exec.sqlite
 import mimir.algebra._
 import mimir.provenance._
 import mimir.util.{JDBCUtils, HTTPUtils, JsonUtils, GeoUtils}
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import org.joda.time.DateTime
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 object SQLiteCompat extends LazyLogging{
 

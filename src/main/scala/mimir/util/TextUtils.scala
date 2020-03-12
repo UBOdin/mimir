@@ -1,6 +1,6 @@
 package mimir.util
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import mimir.algebra._
 
 object TextUtils extends LazyLogging {

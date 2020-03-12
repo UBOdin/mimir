@@ -3,7 +3,7 @@ package mimir.exec.result
 import mimir.Database
 import mimir.exec._
 import mimir.algebra._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import math.{abs,sqrt}
 
 abstract class AggregateValue

@@ -145,7 +145,7 @@ import java.sql.{
   Date,
   Timestamp
 }
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import mimir.Database
 import mimir.algebra._
@@ -200,7 +200,7 @@ class RAToSpark(db: mimir.Database)
 			case Limit(offset, limit, query) => {
 			  //TODO: Need a better way to do offsets in spark. This way works without breaking, but it is almost as 
 			  //  expensive as the full query for small datasets and more expensive for large datasets
-			  val sparkChildOp = mimirOpToSparkOp(query)
+			  val sparkChildOp = mimirOpToSparkOp(query)//.sort(("partition_offset",false)))
 			  val offsetOp = if(offset > 0){
 			    //the records to exclude
 			    val offsetExcept = org.apache.spark.sql.catalyst.plans.logical.Limit(
@@ -235,8 +235,15 @@ class RAToSpark(db: mimir.Database)
         provider match {
           case logicalProvider:LogicalPlanSchemaProvider => {
             val plan = logicalProvider.logicalplan(name)
-    			  val realSchema = provider.tableSchema(name).get
+            val realSchema = provider.tableSchema(name).get
 
+            /*val qe = MimirSpark.get.sparkSession.sessionState.executePlan(plan)
+            qe.assertAnalyzed()
+    			  println("-------------------------------------------------------------------")
+            println(realSchema.mkString("\n"))
+            println(qe.optimizedPlan.schema.fields.mkString("\n"))
+            println("-------------------------------------------------------------------")*/
+        
               //here we check if the real table schema matches the table op schema 
               // because the table op schema may have been rewritten by deepRenameColumn
               // - like when there is a join with conflicts

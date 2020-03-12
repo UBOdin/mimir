@@ -7,7 +7,7 @@ import play.api.libs.json._
 import scala.sys.process._
 import scala.language.postfixOps
 import scala.collection.JavaConverters._
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import mimir._
 import mimir.algebra._

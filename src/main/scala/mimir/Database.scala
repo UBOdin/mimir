@@ -55,7 +55,7 @@ import mimir.sql.{SqlToRA,RAToSql}
 import mimir.statistics.FuncDep
 import mimir.util.ExperimentalOptions
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._

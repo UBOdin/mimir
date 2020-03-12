@@ -3,7 +3,7 @@
 import java.io.File
 import java.sql.SQLException
 import java.util
-import com.typesafe.scalalogging.slf4j.Logger
+import com.typesafe.scalalogging.Logger
 
 import mimir.algebra._
 import mimir.ctables._

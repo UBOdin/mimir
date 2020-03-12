@@ -22,7 +22,6 @@ import java.io.ObjectOutputStream
 import java.io.ObjectInputStream
 import org.apache.spark.util.Utils
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import mimir.exec.spark.MimirSpark
 import com.univocity.parsers.csv.CsvParserSettings
 import com.univocity.parsers.csv.CsvParser
 import java.io.Reader
@@ -37,7 +36,7 @@ import com.univocity.parsers.common.processor.RowListProcessor
 import com.univocity.parsers.common.RetryableErrorHandler
 import com.univocity.parsers.common.ParsingContext
 import com.univocity.parsers.common.DataProcessingException
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 class DefaultSource extends DataSourceV2 with ReadSupport {
 
@@ -118,7 +117,8 @@ class CSVDataSourceReaderFactory(partitionNumber: Int, filePath: String, options
 extends InputPartition[InternalRow] 
 with InputPartitionReader[InternalRow] 
 {
-  
+  private lazy val session = SparkSession.getActiveSession.get
+  private lazy val sparkContext = session.sparkContext
   def createPartitionReader:InputPartitionReader[InternalRow] = new CSVDataSourceReaderFactory(partitionNumber, filePath, options, colCount, hasHeader)
 
   //logger.debug(s"CSVDataSourceReaderFactory($partitionNumber, $filePath, $options, $colCount, $hasHeader)")
@@ -126,16 +126,15 @@ with InputPartitionReader[InternalRow]
   var rowProcessor:RowListProcessor = null
   var parser: CsvParser = null
   var iterator: Iterator[String] = null
-  val parsedOptions = new CSVOptions(
+  lazy val parsedOptions = new CSVOptions(
       options,
-      SparkSession.builder.getOrCreate().sessionState.conf.csvColumnPruning,
-      SparkSession.builder.getOrCreate().sessionState.conf.sessionLocalTimeZone,
-      SparkSession.builder.getOrCreate().sessionState.conf.columnNameOfCorruptRecord)
+      session.sessionState.conf.csvColumnPruning,
+      session.sessionState.conf.sessionLocalTimeZone,
+      session.sessionState.conf.columnNameOfCorruptRecord)
   
   @transient
   def next = {
     if (iterator == null) {
-      val sparkContext = SparkSession.builder.getOrCreate().sparkContext
       val out = new StringBuilder()
       val settings = parsedOptions.asParserSettings
       val delimeter = options.getOrElse("delimeter", ",").charAt(0)

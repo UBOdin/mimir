@@ -2,7 +2,7 @@ package mimir.algebra.function
 
 import mimir.algebra.PrimitiveValue
 import mimir.algebra.{Type,ID}
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 
 
 object SparkFunctions 

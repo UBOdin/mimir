@@ -25,7 +25,7 @@ import scala.util.control.NonFatal
 
 import com.univocity.parsers.csv.CsvParser
 
-import com.typesafe.scalalogging.slf4j.LazyLogging
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.{BadRecordException, DateTimeUtils}
@@ -371,7 +371,7 @@ private[csv] object UnivocityParser {
       input => Seq(parser.convert(input)),
       parser.options.parseMode,
       schema,
-      parser.options.columnNameOfCorruptRecord,true)
+      parser.options.columnNameOfCorruptRecord)//,true)
     convertStream(inputStream, shouldDropHeader, tokenizer, checkHeader) { tokens =>
       safeParser.parse(tokens)
     }.flatten
@@ -419,7 +419,7 @@ private[csv] object UnivocityParser {
       input => Seq(parser.parse(input)),
       parser.options.parseMode,
       schema,
-      parser.options.columnNameOfCorruptRecord, true)
+      parser.options.columnNameOfCorruptRecord)//, true)
 
     filteredLines.flatMap(safeParser.parse)
   }
