@@ -40,7 +40,8 @@ object GeoSparkSpec
   "The Geospark functions" should {
     sequential 
     "Be able to do distance" >> {
- 
+    skipped("fixes required in MimirSpark.registerSparkFunctions"); ko
+        
       
       /*val result = query("""
         SELECT ST_Centroid(ST_PolygonFromEnvelope(1.0,100.0,1000.0,1100.0)) centroid FROM ADDR

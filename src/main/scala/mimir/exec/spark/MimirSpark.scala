@@ -169,10 +169,11 @@ object MimirSpark
         ("javax.measure",              "jsr-275",                    "0.9.1",           false),
         ("org.postgresql",             "postgresql",                 "9.4-1201-jdbc41", false),
         ("org.xerial",                 "sqlite-jdbc",                "3.16.1",          false),
-        ("com.databricks",             "spark-xml",                  "0.5.0",           true),
+        ("com.databricks",             "spark-xml",                  "0.9.0",           true),
+        ("com.sun.xml.txw2",           "txw2",                       "20110809",        false),
         ("com.crealytics",             "spark-excel",                "0.12.0",          true),
-        ("com.google.apis",            "google-api-services-sheets", "v4-rev18-1.22.0", false),
-        ("com.google.api-client",      "google-api-client",          "1.22.0",          false),
+        ("com.google.apis",            "google-api-services-sheets", "v4-rev610-1.25.0", false),
+        ("com.google.api-client",      "google-api-client",          "1.30.9",          false),
         ("com.lihaoyi",                "fastparse",                  "2.1.0"    ,       true),
         ("info.mimirdb",               "sparsity",                   sparsityVersion,   true),
         ("org.datasyslab",             "geospark-sql_2.3",           "1.2.0",           false),
@@ -182,7 +183,8 @@ object MimirSpark
                   if(isScala) { artifact + "_" + scalaVersion }
                   else { artifact }
                 getJarPath(domain, extendedArtifact, version)
-            }
+            } :+ new File(classOf[com.google.api.client.json.GenericJson]
+      .getProtectionDomain().getCodeSource().getLocation().getPath())
 
       for(jar <- requiredJars){
         HadoopUtils.writeToHDFS(sparkCtx, jar.getName(), jar, overwriteJars)
