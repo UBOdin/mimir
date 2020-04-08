@@ -133,7 +133,12 @@ class LoadedTables(val db: Database)
     tableName: ID
   ): (String, Map[String,String], ID) =
   {
-    if(LoadedTables.safeForRawStaging(format)){
+    if(url.startsWith("s3a")){
+      (url,
+       sparkOptions,
+       format)
+    }
+    else if(LoadedTables.safeForRawStaging(format)){
       ( 
         db.staging.stage(url, Some(tableName.id)),
         sparkOptions,
@@ -201,7 +206,10 @@ class LoadedTables(val db: Database)
       case _ => {}
     }
 
-    if(stageSourceURL || stagingIsMandatory) {
+    if(url.startsWith("s3a")){
+      
+    }
+    else if(stageSourceURL || stagingIsMandatory) {
       // Preserve the original URL and configurations in the mimirOptions
       mimirOptions("preStagedUrl") = JsString(url)
       mimirOptions("preStagedSparkOptions") = Json.toJson(finalSparkOptions)

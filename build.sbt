@@ -1,7 +1,7 @@
 import scala.sys.process._
 
 name := "Mimir-Core"
-version := "0.3.1"
+version := "0.3.2"
 organization := "info.mimirdb"
 scalaVersion := "2.12.10"
 
@@ -150,7 +150,7 @@ libraryDependencies ++= Seq(
   "org.specs2"                    %%  "specs2-matcher-extra"     % "4.6.0" % "test",
   "org.specs2"                    %%  "specs2-junit"             % "4.6.0" % "test",
   "org.clapper"                   %%  "classutil" 				 % "1.1.2",
-  "com.amazonaws" 				  %   "aws-java-sdk-s3" 		 % "1.11.234",
+  "com.amazonaws"                 %   "aws-java-sdk"             % "1.7.4",
   //"ch.cern.sparkmeasure" 		  %%  "spark-measure" 			 % "0.13",
   "org.scala-lang" 				  %   "scala-compiler" 		 	 % "2.12.7",
   "org.ddahl" 					  %%  "rscala" 					 % "3.2.15",
@@ -186,8 +186,8 @@ libraryDependencies ++= Seq(
   "com.sun.xml.txw2"         %   "txw2"                      % "20110809",
   "com.crealytics"           %%  "spark-excel"                    % "0.12.0",// excludeAll(ExclusionRule(organization = "org.slf4j", name = "slf4j-log4j12"), ExclusionRule("org.apache.hadoop")),
   //"com.google.api.client"    %   "google-api-client-json"         % "1.2.2-alpha",
-  "org.apache.hadoop"        %   "hadoop-client"          % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
-  "org.apache.hadoop"        %   "hadoop-aws"             % "2.8.2" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.hadoop"        %   "hadoop-client"          % "2.7.6" exclude("org.slf4j", "slf4j-log4j12"),
+  "org.apache.hadoop"        %   "hadoop-aws"             % "2.7.6" exclude("org.slf4j", "slf4j-log4j12"),
   "net.java.dev.jets3t"      %   "jets3t"               % "0.9.4",
   ("com.google.api-client"   %   "google-api-client"             % "1.30.9").exclude("com.google.guava", "guava-jdk5"),
   "com.google.oauth-client"  %   "google-oauth-client-jetty"     % "1.30.6",
