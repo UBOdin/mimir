@@ -229,7 +229,6 @@ object MimirSpark
       sparkCtx.hadoopConfiguration.set("fs.s3a.secret.key", s3SecretKey.get)
       sparkCtx.hadoopConfiguration.set("fs.s3a.path.style.access","true")
       sparkCtx.hadoopConfiguration.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
-      sparkCtx.hadoopConfiguration.set("spark.hadoop.fs.defaultFS","s3a://LOKI")
       sparkCtx.hadoopConfiguration.set("fs.s3a.multipart.size", "100000000")
       sparkCtx.hadoopConfiguration.set("fs.s3a.threads.max", "256")
       sparkCtx.hadoopConfiguration.set("fs.s3a.threads.core", "15")
