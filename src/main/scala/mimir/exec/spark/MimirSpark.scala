@@ -50,10 +50,6 @@ import org.datasyslab.geospark.serde.GeoSparkKryoRegistrator
 import org.datasyslab.geosparksql.utils.GeoSparkSQLRegistrator
 import org.apache.spark.sql.geosparksql.expressions.ST_Point
 import scala.sys.process._
-import org.spark_project.jetty.server.Server
-import org.spark_project.jetty.server.HttpConnectionFactory
-import org.apache.spark.ui.ServerInfo
-
 
 object MimirSpark
   extends LazyLogging
@@ -98,7 +94,7 @@ object MimirSpark
     val sparsityVersion = sparsity.parser.SQL.getClass().getPackage().getImplementationVersion()
     val mimirVersion = MimirSpark.getClass().getPackage().getImplementationVersion()
     val thisObjPath = new File(this.getClass.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
-    logger.warn(s"mimir version: $mimirVersion running from: ${thisObjPath.getAbsolutePath}")
+    logger.info(s"mimir version: $mimirVersion running from: ${thisObjPath.getAbsolutePath}")
     val sparkBuilder = (if(remoteSpark){
       SparkSession.builder.master(s"spark://$sparkHost:$sparkPort")
         .config("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
@@ -136,7 +132,7 @@ object MimirSpark
         .config("spark.driver.cores","4")
         .config("spark.driver.memory",  config.sparkDriverMem())
         .config("spark.executor.memory", config.sparkExecutorMem())
-        //.config("spark.executor.instances", "2")
+        .config("spark.executor.instances", "2")
         //.config("spark.executor.cores", "5")
         .config("spark.sql.catalogImplementation", "hive")
         .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -185,8 +181,9 @@ object MimirSpark
         ("info.mimirdb",               "sparsity",                   sparsityVersion,   true),
         ("org.datasyslab",             "geospark-sql_2.3",           "1.2.0",           false),
         ("org.rogach",                 "scallop",                    "3.1.3",           true),
-        ("com.amazonaws",              "aws-java-sdk",               "1.7.4",           false),
-        ("org.apache.hadoop",          "hadoop-aws",                 "2.7.6",            false)
+        ("com.amazonaws",              "aws-java-sdk-core",          "1.11.234",        false),
+        ("com.amazonaws",              "aws-java-sdk-s3",            "1.11.234",        false),
+        ("org.apache.hadoop",          "hadoop-aws",                 "2.8.2",           false)
       ).map { case (domain, artifact, version, isScala) => 
                 val extendedArtifact = 
                   if(isScala) { artifact + "_" + scalaVersion }
@@ -230,11 +227,6 @@ object MimirSpark
       sparkCtx.hadoopConfiguration.set("fs.s3a.path.style.access","true")
       sparkCtx.hadoopConfiguration.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
       sparkCtx.hadoopConfiguration.set("fs.s3a.multipart.size", "100000000")
-      sparkCtx.hadoopConfiguration.set("fs.s3a.threads.max", "256")
-      sparkCtx.hadoopConfiguration.set("fs.s3a.threads.core", "15")
-      sparkCtx.hadoopConfiguration.set("fs.s3a.threads.keepalivetime", "60")
-      sparkCtx.hadoopConfiguration.set("fs.s3a.max.total.tasks", "1000")
-      sparkCtx.hadoopConfiguration.set("fs.s3a.block.size", "32000000")
       sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disableGetObjectMD5Validation", "true")
       sparkCtx.hadoopConfiguration.set("com.amazonaws.services.s3.disablePutObjectMD5Validation", "true")
       sparkCtx.hadoopConfiguration.set("fs.s3a.connection.ssl.enabled", "true")
@@ -245,25 +237,6 @@ object MimirSpark
       logger.debug("No S3 Access Key provided. Not configuring S3")
     }
 
-    
-    /*val method = sparkSession.sparkContext.getClass.getDeclaredMethod("ui")
-    method.setAccessible(true)
-    val sparkui =
-      method.invoke(sparkSession.sparkContext).asInstanceOf[Option[AnyRef]].get
-    val field = sparkui.getClass.getSuperclass.getDeclaredField("serverInfo")
-    field.setAccessible(true)  
-    val serverInfo =  field.get(sparkui).asInstanceOf[Option[AnyRef]].get
-    
-    val serverField = serverInfo.getClass.getDeclaredField("server")
-    serverField.setAccessible(true)
-    val jettyServer = serverField.get(serverInfo).asInstanceOf[Server]
-    jettyServer
-      .getConnectors()(0)
-      .getConnectionFactory("http/1.1")
-      .asInstanceOf[HttpConnectionFactory]
-      .getHttpConfiguration
-      .setOutputBufferSize(1)*/
-      
     sparkSql = sparkSession.sqlContext//new SQLContext(sparkCtx)
     GeoSparkSQLRegistrator.registerAll(sparkSession)  
   }
@@ -479,7 +452,7 @@ object MimirSpark
       return
     }
     println("running spark-------------------------------------")
-    val sparkVersion = "spark-2.4.4-bin-without-hadoop-scala-2.12"//"spark-2.4.4-bin-hadoop2.7"
+    val sparkVersion = "spark-2.4.4-bin-without-hadoop-scala-2.12-2"//"spark-2.4.4-bin-hadoop2.7"
     val dataDirF = new File(dataDir)
     val sparkVerDirF = new File(s"${sparkDir}/${sparkVersion}")
     if(!sparkVerDirF.exists()){
