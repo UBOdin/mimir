@@ -92,9 +92,13 @@ object MimirSpark
     val dataDir = config.dataDirectory()
     val scalaVersion = util.Properties.versionNumberString.substring(0,util.Properties.versionNumberString.lastIndexOf('.'))
     val sparsityVersion = sparsity.parser.SQL.getClass().getPackage().getImplementationVersion()
-    val mimirVersion = MimirSpark.getClass().getPackage().getImplementationVersion()
-    val thisObjPath = new File(this.getClass.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
-    logger.info(s"mimir version: $mimirVersion running from: ${thisObjPath.getAbsolutePath}")
+    val mimirVersion = Option(MimirSpark.getClass().getPackage().getImplementationVersion()).getOrElse("0.3.2")
+    try{
+      val thisObjPath = new File(this.getClass.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
+      logger.info(s"mimir version: $mimirVersion running from: ${thisObjPath.getAbsolutePath}")
+    }catch {
+      case t:Throwable => logger.info(s"scala version: $scalaVersion mimir version: $mimirVersion sparsity version: $sparsityVersion")
+    }
     val sparkBuilder = (if(remoteSpark){
       SparkSession.builder.master(s"spark://$sparkHost:$sparkPort")
         .config("fs.hdfs.impl",classOf[org.apache.hadoop.hdfs.DistributedFileSystem].getName)
@@ -183,7 +187,8 @@ object MimirSpark
         ("org.rogach",                 "scallop",                    "3.1.3",           true),
         ("com.amazonaws",              "aws-java-sdk-core",          "1.11.234",        false),
         ("com.amazonaws",              "aws-java-sdk-s3",            "1.11.234",        false),
-        ("org.apache.hadoop",          "hadoop-aws",                 "2.8.2",           false)
+        ("org.apache.hadoop",          "hadoop-aws",                 "2.8.2",           false),
+        ("com.fasterxml.jackson.core", "jackson-core",               "2.10.0",          false)
       ).map { case (domain, artifact, version, isScala) => 
                 val extendedArtifact = 
                   if(isScala) { artifact + "_" + scalaVersion }

@@ -165,7 +165,7 @@ libraryDependencies ++= Seq(
   "org.apache.commons"            %   "commons-csv"              % "1.4",
   "commons-io"                    %   "commons-io"               % "2.5",
   "com.github.wnameless"          %   "json-flattener"           % "0.2.2",
-  "com.typesafe.play"             %%  "play-json"                % "2.7.0-M1",
+  "com.typesafe.play"             %%  "play-json"                % "2.7.0-M1"  excludeAll( ExclusionRule("com.fasterxml.jackson.core")),
   "technology.tabula" 			  %	  "tabula" 					 % "1.0.3",
   "org.apache.commons" 			  %   "commons-compress" 	 	 % "1.19",
   
@@ -195,6 +195,7 @@ libraryDependencies ++= Seq(
   "com.google.apis"          %   "google-api-services-sheets"    % "v4-rev610-1.25.0",
   "org.datasyslab"           %   "geospark"                      % "1.2.0",
   "org.datasyslab"           %   "geospark-sql_2.3"                  % "1.2.0",
+  "com.fasterxml.jackson.core" % "jackson-core"                  % "2.10.0",
   
   
   //////////////////////// Jung ////////////////////////
