@@ -83,3 +83,10 @@ $> docker run -i -t docker.mimirdb.info/mimir-core
 
 * See the [developer guidelines](https://github.com/UBOdin/mimir/wiki/Development)
 * Also see the [ScalaDoc](http://doc.odin.cse.buffalo.edu/mimir)
+
+## Credit 
+
+Development of Mimir has been sponsored by
+* The [National Science Foundation](https://nsf.gov) (Awards [#IIS-1750460](https://www.nsf.gov/awardsearch/showAward?AWD_ID=1750460), [#ACI-1640864](https://www.nsf.gov/awardsearch/showAward?AWD_ID=1640864), and [#IIS-1956149](https://www.nsf.gov/awardsearch/showAward?AWD_ID=1956149))
+* Oracle University Relations
+* The US Naval Postgraduate School (Award #N00244-16-1-0022)
